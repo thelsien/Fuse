@@ -1,0 +1,39 @@
+# Gradle / Kotlin
+.gradle/
+build/
+**/build/
+.kotlin/
+local.properties
+captures/
+
+# IntelliJ / Android Studio
+.idea/
+*.iml
+*.ipr
+*.iws
+
+# Android
+*.apk
+*.aab
+*.ap_
+*.dex
+release/
+
+# iOS / Xcode / KMP
+*.xcuserstate
+*.xcworkspace/xcuserdata/
+xcuserdata/
+DerivedData/
+**/iosApp/Pods/
+**/iosApp/*.xcworkspace
+Podfile.lock
+
+# Kotlin/Native
+*.klib
+
+# macOS
+.DS_Store
+
+# Misc
+*.log
+.env
