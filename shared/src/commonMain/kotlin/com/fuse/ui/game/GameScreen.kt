@@ -1,9 +1,7 @@
 package com.fuse.ui.game
 
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -19,14 +17,12 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.fuse.presentation.GameIntent
 import com.fuse.presentation.GameStore
 import com.fuse.presentation.GameUiState
 import com.fuse.ui.board.BoardView
 import com.fuse.ui.input.swipeable
-import com.fuse.ui.theme.FuseTheme
 import org.koin.compose.koinInject
 
 /**
@@ -35,7 +31,7 @@ import org.koin.compose.koinInject
  *
  * It resolves the [GameStore] from Koin (overridable via [store] for tests), collects
  * its [GameStore.state], and renders:
- *  - a minimal score line (just enough to see the binding work — the full HUD is UIB-4),
+ *  - the [ScoreHud] (UIB-4) showing live current + session-best score,
  *  - the [BoardView] wrapped in [Modifier.swipeable] so every resolved swipe becomes a
  *    [GameIntent.Move] (engine → new state → recomposition), disabled once the game is
  *    over,
@@ -86,24 +82,11 @@ fun GameScreenContent(
                 .padding(16.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
-            // Minimal score line (full HUD = UIB-4).
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Text(
-                    text = "Score ${state.currentScore}",
-                    color = FuseTheme.colors.text,
-                    fontWeight = FontWeight.Bold,
-                    modifier = Modifier.testTag(GameScreenTags.SCORE),
-                )
-                Text(
-                    text = "Best ${state.bestScore}",
-                    color = FuseTheme.colors.sub,
-                    modifier = Modifier.testTag(GameScreenTags.BEST),
-                )
-            }
+            // UIB-4 — the score HUD (live current + session best), fed from store state.
+            ScoreHud(
+                current = state.currentScore,
+                best = state.bestScore,
+            )
 
             Spacer(Modifier.height(16.dp))
 
@@ -137,8 +120,6 @@ fun GameScreenContent(
 /** Stable test tags so UI tests target nodes without depending on copy. */
 object GameScreenTags {
     const val ROOT: String = "game_screen"
-    const val SCORE: String = "game_score"
-    const val BEST: String = "game_best"
     const val BOARD: String = "game_board"
     const val NEW_GAME: String = "game_new_game"
 }

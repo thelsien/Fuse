@@ -1,6 +1,7 @@
 package com.fuse.ui.game
 
 import androidx.compose.ui.test.ExperimentalTestApi
+import androidx.compose.ui.test.assertTextEquals
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
@@ -60,14 +61,14 @@ class GameScreenUiTest {
         }
 
         // Before: two 2-tiles, score 0.
-        onNodeWithText("Score 0").assertExists()
+        onNodeWithTag(ScoreHudTags.SCORE_VALUE).assertTextEquals("0")
 
         onNodeWithTag(GameScreenTags.BOARD).performTouchInput { swipeLeft() }
         waitForIdle()
 
-        // After: a merged 4 appears and the score line shows +4 (plus a spawned tile).
-        onNodeWithText("4").assertExists()
-        onNodeWithText("Score 4").assertExists()
+        // After: the HUD score shows +4 (the merge), and best tracks the new max.
+        onNodeWithTag(ScoreHudTags.SCORE_VALUE).assertTextEquals("4")
+        onNodeWithTag(ScoreHudTags.BEST_VALUE).assertTextEquals("4")
     }
 
     @OptIn(ExperimentalTestApi::class)
@@ -91,7 +92,7 @@ class GameScreenUiTest {
             FuseTheme { GameScreen(store = store) }
         }
 
-        onNodeWithText("Score 0").assertExists()
+        onNodeWithTag(ScoreHudTags.SCORE_VALUE).assertTextEquals("0")
 
         onNodeWithTag(GameScreenTags.BOARD).performTouchInput { swipeLeft() }
         waitForIdle()
@@ -99,7 +100,7 @@ class GameScreenUiTest {
         // Blocked: numerals and score unchanged, no merged/higher tile appeared.
         onNodeWithText("2").assertExists()
         onNodeWithText("16").assertExists()
-        onNodeWithText("Score 0").assertExists()
+        onNodeWithTag(ScoreHudTags.SCORE_VALUE).assertTextEquals("0")
     }
 
     @OptIn(ExperimentalTestApi::class)
@@ -123,12 +124,13 @@ class GameScreenUiTest {
 
         onNodeWithTag(GameScreenTags.BOARD).performTouchInput { swipeLeft() }
         waitForIdle()
-        onNodeWithText("Score 4").assertExists()
+        onNodeWithTag(ScoreHudTags.SCORE_VALUE).assertTextEquals("4")
 
         onNodeWithTag(GameScreenTags.NEW_GAME).performClick()
         waitForIdle()
 
-        // Restart zeroes the score.
-        onNodeWithText("Score 0").assertExists()
+        // Restart zeroes the running score but best holds the session max (4).
+        onNodeWithTag(ScoreHudTags.SCORE_VALUE).assertTextEquals("0")
+        onNodeWithTag(ScoreHudTags.BEST_VALUE).assertTextEquals("4")
     }
 }
