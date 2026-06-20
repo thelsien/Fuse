@@ -9,8 +9,22 @@ androidx-activity-compose = "1.10.1"
 # Koin 4.0.4: KMP-first DI. Stable release aligned with Kotlin 2.1.x and
 # Compose Multiplatform 1.8.x (4.1+ tracks newer Compose/lifecycle baselines).
 koin = "4.0.4"
+# Kotlinx Kover — the standard KMP code-coverage tool. 0.9.1 supports
+# Kotlin 2.1.x and KMP source-set aggregation (JVM + Android variants).
+kover = "0.9.1"
+# Robolectric backs Compose Multiplatform's `runComposeUiTest` on the Android
+# JVM unit-test target, so the one shared Compose UI test runs HEADLESS in the
+# existing `:shared:testDebugUnitTest` CI step — no device/emulator required.
+robolectric = "4.13"
+# androidx.compose.ui 1.8.2 == the Compose Multiplatform 1.8.2 baseline. The
+# ui-test-manifest artifact (the empty ComponentActivity that runComposeUiTest
+# launches) has no Compose-MP DSL alias, so it is referenced directly here and
+# version-pinned to the same baseline.
+androidx-compose-ui = "1.8.2"
 
 [libraries]
+robolectric = { module = "org.robolectric:robolectric", version.ref = "robolectric" }
+androidx-compose-ui-test-manifest = { module = "androidx.compose.ui:ui-test-manifest", version.ref = "androidx-compose-ui" }
 androidx-activity-compose = { module = "androidx.activity:activity-compose", version.ref = "androidx-activity-compose" }
 # DI — Koin. koin-core is the multiplatform graph used in commonMain; koin-test
 # (commonTest) gives the Koin verification utilities; koin-compose wires Koin
@@ -27,3 +41,4 @@ kotlin-compose = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "ko
 compose-multiplatform = { id = "org.jetbrains.compose", version.ref = "compose-multiplatform" }
 android-application = { id = "com.android.application", version.ref = "agp" }
 android-library = { id = "com.android.library", version.ref = "agp" }
+kover = { id = "org.jetbrains.kotlinx.kover", version.ref = "kover" }

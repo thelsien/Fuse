@@ -72,11 +72,32 @@ jobs:
       - name: Lint (Android Gradle Plugin lint)
         run: ./gradlew :androidApp:lintDebug :shared:lintDebug --stacktrace
 
-      # Android/JVM unit tests for the shared module. No tests exist yet
-      # (engine lands in Sprint 1) so this passes trivially today — the gate is
-      # wired and ready for when tests arrive.
-      - name: Unit tests (Android / JVM)
+      # Android/JVM unit tests for the shared module. As of FND-5 this also runs
+      # the ONE headless Compose UI test (com.fuse.ui.SwatchScreenUiTest): it
+      # lives in the `androidUnitTest` source set and uses Compose
+      # Multiplatform's `runComposeUiTest` under Robolectric, so it executes as a
+      # local JVM test with NO emulator/device. (It is in androidUnitTest rather
+      # than commonTest because Compose's Android test runtime requires the
+      # RobolectricTestRunner, a JUnit/Android construct that cannot live in
+      # commonTest.)
+      - name: Unit tests (Android / JVM, incl. headless Compose UI test)
         run: ./gradlew :shared:testDebugUnitTest --stacktrace
+
+      # FND-5 coverage: Kotlinx Kover. Aggregates the :shared module's coverage
+      # into root HTML + XML reports (build/reports/kover/). Generated on every
+      # run and uploaded below as a workflow artifact.
+      - name: Coverage report (Kover HTML + XML)
+        run: ./gradlew koverHtmlReport koverXmlReport --stacktrace
+
+      - name: Upload coverage report
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report
+          path: |
+            build/reports/kover/html/**
+            build/reports/kover/report.xml
+          if-no-files-found: warn
+          retention-days: 14
 
       - name: Upload reports on failure
         if: failure()
