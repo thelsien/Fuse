@@ -29,6 +29,12 @@ kotlinx-coroutines = "1.9.0"
 # launches) has no Compose-MP DSL alias, so it is referenced directly here and
 # version-pinned to the same baseline.
 androidx-compose-ui = "1.8.2"
+# com.russhwolf:multiplatform-settings — UIB-6 local key-value persistence for the
+# in-progress game blob + best score. 1.2.0 is the stable release aligned with
+# Kotlin 2.1.x / KMP (Android SharedPreferences + iOS NSUserDefaults backends), and
+# ships the `multiplatform-settings-test` (in-memory MapSettings) artifact used for
+# deterministic round-trip tests in commonTest.
+multiplatform-settings = "1.2.0"
 
 [libraries]
 robolectric = { module = "org.robolectric:robolectric", version.ref = "robolectric" }
@@ -47,6 +53,12 @@ kotlinx-serialization-json = { module = "org.jetbrains.kotlinx:kotlinx-serializa
 # store deterministically in commonTest (runTest + StandardTestDispatcher).
 kotlinx-coroutines-core = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-core", version.ref = "kotlinx-coroutines" }
 kotlinx-coroutines-test = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-test", version.ref = "kotlinx-coroutines" }
+# UIB-6: multiplatform local persistence. `multiplatform-settings` is the common
+# Settings API (with platform backends pulled in transitively: SharedPreferences on
+# Android, NSUserDefaults on iOS). `multiplatform-settings-test` provides the
+# in-memory MapSettings used to round-trip the game blob deterministically in tests.
+multiplatform-settings = { module = "com.russhwolf:multiplatform-settings", version.ref = "multiplatform-settings" }
+multiplatform-settings-test = { module = "com.russhwolf:multiplatform-settings-test", version.ref = "multiplatform-settings" }
 
 [plugins]
 kotlin-multiplatform = { id = "org.jetbrains.kotlin.multiplatform", version.ref = "kotlin" }

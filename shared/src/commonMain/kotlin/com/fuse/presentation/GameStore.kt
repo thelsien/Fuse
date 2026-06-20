@@ -1,5 +1,7 @@
 package com.fuse.presentation
 
+import com.fuse.data.GameRepository
+import com.fuse.data.NoOpGameRepository
 import com.fuse.engine.Board
 import com.fuse.engine.BoardMergeEvent
 import com.fuse.engine.Direction
@@ -63,23 +65,56 @@ import kotlinx.coroutines.flow.asStateFlow
  * reproducible in tests and never repeats the previous board. Real entropy/wall-clock
  * time as a seed is a later concern (a platform clock can be injected via [seedSource]).
  *
- * @param initialSeed the seed for the very first game (the board shown on launch).
- * @param initialBest a best score to carry into the first game — the seam for UIB-6 to
- *   inject a persisted best; defaults to 0 (no persistence yet).
+ * ## UIB-6 — persist & resume
+ * The store is the one place that touches persistence:
+ *  - **On init** it asks the injected [repository] for a saved best (used as the floor
+ *    for the score) and any saved in-progress [GameState]. If a saved game exists it is
+ *    RESUMED verbatim (board, tile ids, score, phase, rng/id state) so play continues
+ *    deterministically as if the app never closed; otherwise a fresh [newGame] starts.
+ *  - **After every accepted [GameIntent.Move] and every [GameIntent.NewGame]** it writes
+ *    the current [GameState] and best back through [repository]. Writes are synchronous
+ *    to match the synchronous reduce (the `Settings` store is fast); a blocked move
+ *    changes nothing, so it need not persist (the prior blob still describes the game).
+ *
+ * The default [repository] is [NoOpGameRepository] so existing tests / previews (and
+ * [forState]) construct without a real `Settings`: it loads nothing and saves nothing.
+ *
+ * @param initialSeed the seed for the very first game (when nothing is persisted).
+ * @param initialBest a best score floor carried into the first game; merged with the
+ *   persisted best from [repository] (the persisted best wins when higher).
  * @param target the win target threaded into every game (default classic 2048).
  * @param seedSource supplies the seed for each restart ([GameIntent.NewGame] with no
  *   explicit seed). Defaults to an incrementing counter starting after [initialSeed].
+ * @param repository UIB-6 local persistence; defaults to a no-op so tests need no
+ *   `Settings`. The Koin-built store injects the real [com.fuse.data.GameRepository].
  */
 class GameStore(
     initialSeed: Long = DEFAULT_INITIAL_SEED,
-    private val initialBest: Long = 0L,
+    initialBest: Long = 0L,
     private val target: Int = com.fuse.engine.DEFAULT_WIN_TARGET,
     private val seedSource: () -> Long = incrementingSeedSource(initialSeed),
     startState: GameState? = null,
+    private val repository: GameRepository = NoOpGameRepository,
 ) {
-    /** The single source of truth: the current engine snapshot. */
+    /**
+     * The best score to carry into a fresh/restarted game: the higher of the
+     * constructor [initialBest] and the best persisted by [repository]. Resolved once
+     * at init (before any save) so a relaunch over the same store seeds the prior best.
+     */
+    private val initialBest: Long = maxOf(initialBest, repository.loadBest())
+
+    /**
+     * The single source of truth: the current engine snapshot.
+     *
+     * Resolution order on init: an explicit [startState] (test/preview seam) wins; else
+     * a persisted in-progress game is RESUMED (UIB-6); else a fresh [newGame]. A resumed
+     * game keeps its own embedded best, but is floored to [initialBest] so a higher
+     * persisted/seeded best is never lost.
+     */
     private var gameState: GameState =
-        startState ?: newGame(seed = initialSeed, target = target, best = initialBest)
+        startState
+            ?: repository.loadGame()?.flooredBest(this.initialBest)
+            ?: newGame(seed = initialSeed, target = target, best = this.initialBest)
 
     private val _state = MutableStateFlow(GameUiState.playing(gameState))
 
@@ -95,6 +130,12 @@ class GameStore(
     /** One-shot effects (e.g. [GameEffect.Blocked]). Hot, non-replaying. */
     val effects: Flow<GameEffect> = _effects.asSharedFlow()
 
+    init {
+        // UIB-6: persist the starting state so a fresh launch is resumable even before
+        // the first move, and so a freshly-floored best is written through immediately.
+        persist()
+    }
+
     /** Submits an [intent] and synchronously reduces it into [state]/[effects]. */
     fun accept(intent: GameIntent) {
         when (intent) {
@@ -108,6 +149,9 @@ class GameStore(
         if (outcome.accepted) {
             gameState = outcome.state
             _state.value = GameUiState.fromAccepted(gameState, outcome)
+            // UIB-6: persist the new in-progress game + best after every accepted move,
+            // so a kill-and-relaunch resumes the exact same board/score/rng state.
+            persist()
             // One-shot win event (UIB-5): fire exactly once on the move that first
             // reaches the target, alongside the persistent Won phase. See KDoc on
             // [GameEffect.Won] for why this is an effect, not derived from state.
@@ -124,10 +168,22 @@ class GameStore(
 
     private fun reduceNewGame(seed: Long?) {
         val chosenSeed = seed ?: seedSource()
-        // A restart preserves the player's best across the session.
+        // A restart preserves the player's best across the session (and across launches).
         val best = maxOf(initialBest, gameState.score.best)
         gameState = newGame(seed = chosenSeed, target = target, best = best)
         _state.value = GameUiState.playing(gameState)
+        // UIB-6: overwrite the saved game with the fresh board and persist the best.
+        persist()
+    }
+
+    /**
+     * UIB-6 — write the current [gameState] (the whole in-progress game) and its best
+     * back through [repository]. Best is saved separately so it survives even when the
+     * game blob is later cleared/overwritten by a brand-new game.
+     */
+    private fun persist() {
+        repository.saveGame(gameState)
+        repository.saveBest(gameState.score.best)
     }
 
     companion object {
@@ -143,13 +199,29 @@ class GameStore(
         fun forState(
             state: GameState,
             seedSource: () -> Long = incrementingSeedSource(DEFAULT_INITIAL_SEED),
-        ): GameStore = GameStore(seedSource = seedSource, startState = state)
+            repository: GameRepository = NoOpGameRepository,
+        ): GameStore = GameStore(
+            seedSource = seedSource,
+            startState = state,
+            repository = repository,
+        )
 
         /** A restart seed source that never repeats the previous game's board. */
         private fun incrementingSeedSource(start: Long): () -> Long {
             var next = start + 1
             return { next++ }
         }
+
+        /**
+         * UIB-6 — returns this state with its [Score.best] raised to at least [floor]
+         * (and never lowered). Used when resuming a saved game so a higher persisted /
+         * seeded best is preserved; if the floor is already covered the state is
+         * returned unchanged (identity), so a plain resume is byte-for-byte the saved
+         * game and determinism is untouched.
+         */
+        private fun GameState.flooredBest(floor: Long): GameState =
+            if (score.best >= floor) this
+            else copy(score = score.copy(best = maxOf(score.best, floor)))
     }
 }
 

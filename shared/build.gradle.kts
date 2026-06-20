@@ -46,6 +46,10 @@ kotlin {
             implementation(libs.kotlinx.serialization.json)
             // UIB-3: StateFlow-backed MVI store in the presentation layer.
             implementation(libs.kotlinx.coroutines.core)
+            // UIB-6: local key-value persistence (save/resume game + best score).
+            // The common Settings API; platform backends (Android SharedPreferences,
+            // iOS NSUserDefaults) come in transitively and are wired via Koin.
+            implementation(libs.multiplatform.settings)
         }
         commonTest.dependencies {
             implementation(kotlin("test"))
@@ -59,6 +63,9 @@ kotlin {
             // and the iOS native target — no device/emulator needed.
             @OptIn(org.jetbrains.compose.ExperimentalComposeLibrary::class)
             implementation(compose.uiTest)
+            // UIB-6: in-memory MapSettings to round-trip the persisted game/best
+            // deterministically (no real SharedPreferences/NSUserDefaults needed).
+            implementation(libs.multiplatform.settings.test)
         }
         androidMain.dependencies {
             implementation(compose.preview)
