@@ -1,25 +1,34 @@
 package com.fuse.shared
 
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
-import com.fuse.presentation.SamplePresenter
-import com.fuse.ui.theme.SwatchScreen
-import org.koin.compose.koinInject
+import androidx.compose.ui.Modifier
+import com.fuse.ui.game.GameScreen
+import com.fuse.ui.theme.FuseTheme
 
 /**
  * Root composable for the Fuse game. Entry point for both Android and iOS.
  *
- * FND-4 makes this the design-token swatch/preview screen: it renders the full
- * palette, tile color ramp, type scale, shapes and spacing purely from the token
- * layer ([com.fuse.ui.theme]), with a dark/light toggle. The token layer is
- * Koin-independent, so the screen renders with or without a started graph.
+ * UIB-3 makes this the **playable game**: the app now boots straight into
+ * [GameScreen], which resolves the MVI [com.fuse.presentation.GameStore] from the
+ * (already-started) Koin graph, renders the board, and turns swipes into engine
+ * moves — the First-Playable-trajectory moment. The screen is wrapped in [FuseTheme]
+ * (dark) so the design tokens drive its colors.
  *
- * The FND-3 Koin wiring is preserved: the sample [SamplePresenter] is still
- * resolved from the graph (proving DI is live) and its value is handed to the
- * screen as a footer. The Koin graph must already be started (each app shell
- * calls initKoin()) before this composable runs.
+ * The FND-4 [com.fuse.ui.theme.SwatchScreen] token preview is intentionally KEPT in
+ * the codebase (it is still a useful tokens reference / future debug route); it is
+ * simply no longer the app's content. The Koin graph must already be started (each
+ * app shell calls `initKoin()`) before this composable runs, because [GameScreen]
+ * injects its store via `koinInject()`.
  */
 @Composable
 fun App() {
-    val presenter = koinInject<SamplePresenter>()
-    SwatchScreen(diStatus = presenter.greetingText())
+    FuseTheme(darkTheme = true) {
+        GameScreen(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(FuseTheme.colors.bg),
+        )
+    }
 }
