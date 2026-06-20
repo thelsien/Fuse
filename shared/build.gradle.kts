@@ -35,6 +35,14 @@ kotlin {
             implementation(compose.ui)
             implementation(compose.components.resources)
             implementation(compose.components.uiToolingPreview)
+            // DI graph is portable code -> Koin lives in commonMain.
+            implementation(libs.koin.core)
+            implementation(libs.koin.compose)
+        }
+        commonTest.dependencies {
+            implementation(kotlin("test"))
+            // Koin's test helpers (verify/checkModules) run on every CI target.
+            implementation(libs.koin.test)
         }
         androidMain.dependencies {
             implementation(compose.preview)

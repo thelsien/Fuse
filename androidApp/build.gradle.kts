@@ -35,4 +35,8 @@ android {
 dependencies {
     implementation(project(":shared"))
     implementation(libs.androidx.activity.compose)
+    // Koin Android helpers (androidContext/androidLogger) used by FuseApplication
+    // to start the shared graph; KoinApplication type lives in koin-core, pulled
+    // in transitively.
+    implementation(libs.koin.android)
 }
