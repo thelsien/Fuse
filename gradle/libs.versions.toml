@@ -6,9 +6,19 @@ android-compileSdk = "35"
 android-minSdk = "24"
 android-targetSdk = "35"
 androidx-activity-compose = "1.10.1"
+# Koin 4.0.4: KMP-first DI. Stable release aligned with Kotlin 2.1.x and
+# Compose Multiplatform 1.8.x (4.1+ tracks newer Compose/lifecycle baselines).
+koin = "4.0.4"
 
 [libraries]
 androidx-activity-compose = { module = "androidx.activity:activity-compose", version.ref = "androidx-activity-compose" }
+# DI — Koin. koin-core is the multiplatform graph used in commonMain; koin-test
+# (commonTest) gives the Koin verification utilities; koin-compose wires Koin
+# into Compose Multiplatform; koin-android adds the Android Application helpers.
+koin-core = { module = "io.insert-koin:koin-core", version.ref = "koin" }
+koin-test = { module = "io.insert-koin:koin-test", version.ref = "koin" }
+koin-compose = { module = "io.insert-koin:koin-compose", version.ref = "koin" }
+koin-android = { module = "io.insert-koin:koin-android", version.ref = "koin" }
 
 [plugins]
 kotlin-multiplatform = { id = "org.jetbrains.kotlin.multiplatform", version.ref = "kotlin" }
