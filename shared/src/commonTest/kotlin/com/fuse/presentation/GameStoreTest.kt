@@ -102,6 +102,32 @@ class GameStoreTest {
         assertFalse(store.state.value.lastMoveBlocked, "accepted move clears blocked flag")
     }
 
+    @OptIn(ExperimentalCoroutinesApi::class)
+    @Test
+    fun firstWinEmitsOneShotWonEffectExactlyOnce() = runTest {
+        // A row [1024,1024] (rest empty): LEFT merges to 2048 -> first win.
+        val store = GameStore.forState(nearWinLeftState())
+        val received = mutableListOf<GameEffect>()
+        val job = launch(UnconfinedTestDispatcher(testScheduler)) {
+            store.effects.toList(received)
+        }
+
+        store.accept(GameIntent.Move(Direction.LEFT))
+
+        assertTrue(store.state.value.justWon, "the winning move sets justWon")
+        assertTrue(store.state.value.phase is GamePhase.Won, "phase is Won after reaching target")
+        assertEquals(listOf<GameEffect>(GameEffect.Won), received, "exactly one Won effect")
+
+        // A subsequent accepted move must NOT re-emit Won (the win is a one-shot).
+        store.accept(GameIntent.Move(Direction.RIGHT))
+        assertEquals(
+            listOf<GameEffect>(GameEffect.Won),
+            received,
+            "Won fires once; later moves past 2048 do not re-emit it",
+        )
+        job.cancel()
+    }
+
     @Test
     fun newGameResetsBoardAndScore() {
         val store = GameStore.forState(twoTwoRowState())
@@ -167,6 +193,18 @@ class GameStoreTest {
         Board.fromValues(
             arrayOf(
                 intArrayOf(2, 2, 0, 0),
+                intArrayOf(0, 0, 0, 0),
+                intArrayOf(0, 0, 0, 0),
+                intArrayOf(0, 0, 0, 0),
+            ),
+        ),
+    )
+
+    /** A row [1024,1024] (rest empty): LEFT merges to 2048 -> first win. */
+    private fun nearWinLeftState(): GameState = stateFromBoard(
+        Board.fromValues(
+            arrayOf(
+                intArrayOf(1024, 1024, 0, 0),
                 intArrayOf(0, 0, 0, 0),
                 intArrayOf(0, 0, 0, 0),
                 intArrayOf(0, 0, 0, 0),
