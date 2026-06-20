@@ -1,7 +1,10 @@
 package com.fuse.di
 
 import com.fuse.data.DefaultGreeting
+import com.fuse.data.GameRepository
 import com.fuse.data.Greeting
+import com.fuse.data.SettingsGameRepository
+import com.fuse.data.platformSettingsModule
 import com.fuse.domain.GetGreetingUseCase
 import com.fuse.presentation.GameStore
 import com.fuse.presentation.SamplePresenter
@@ -25,6 +28,10 @@ val engineModule: Module = module {
 /** Data layer — repositories / local sources. Provides the sample [Greeting]. */
 val dataModule: Module = module {
     single<Greeting> { DefaultGreeting() }
+    // UIB-6: local persistence for the in-progress game + best score. Depends on the
+    // platform `Settings` bound by [platformSettingsModule] (SharedPreferences on
+    // Android, NSUserDefaults on iOS).
+    single<GameRepository> { SettingsGameRepository(get()) }
 }
 
 /** Domain layer — use cases. Sample use case consuming the data abstraction. */
@@ -35,18 +42,24 @@ val domainModule: Module = module {
 /** Presentation layer — MVI stores/presenters. */
 val presentationModule: Module = module {
     factory { SamplePresenter(get()) }
-    // UIB-3: the game's MVI store. `single` — it holds the live GameState, so the
-    // whole app shares one game instance (UIB-6 will inject a persisted best here).
-    single { GameStore() }
+    // UIB-3/UIB-6: the game's MVI store. `single` — it holds the live GameState, so the
+    // whole app shares one game instance. The store takes the [GameRepository] so it
+    // loads any saved game/best on init (resume) and persists after every change.
+    single { GameStore(repository = get()) }
 }
 
 /** UI layer — composable-scoped providers (FND-4 design tokens etc.). Empty. */
 val uiModule: Module = module {
 }
 
-/** The full application graph, ordered by layer. Used by [initKoin]. */
+/** The full application graph, ordered by layer. Used by [initKoin].
+ *
+ * [platformSettingsModule] is the per-platform `expect`/`actual` binding for the
+ * `Settings` store (SharedPreferences / NSUserDefaults); it must precede [dataModule],
+ * which resolves `Settings` for the [com.fuse.data.GameRepository]. */
 val appModules: List<Module> = listOf(
     engineModule,
+    platformSettingsModule,
     dataModule,
     domainModule,
     presentationModule,
