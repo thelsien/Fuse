@@ -3,6 +3,7 @@ package com.fuse.di
 import com.fuse.data.DefaultGreeting
 import com.fuse.data.Greeting
 import com.fuse.domain.GetGreetingUseCase
+import com.fuse.presentation.GameStore
 import com.fuse.presentation.SamplePresenter
 import org.koin.core.module.Module
 import org.koin.dsl.module
@@ -31,9 +32,12 @@ val domainModule: Module = module {
     factory { GetGreetingUseCase(get()) }
 }
 
-/** Presentation layer — MVI stores/presenters. Sample presenter. */
+/** Presentation layer — MVI stores/presenters. */
 val presentationModule: Module = module {
     factory { SamplePresenter(get()) }
+    // UIB-3: the game's MVI store. `single` — it holds the live GameState, so the
+    // whole app shares one game instance (UIB-6 will inject a persisted best here).
+    single { GameStore() }
 }
 
 /** UI layer — composable-scoped providers (FND-4 design tokens etc.). Empty. */

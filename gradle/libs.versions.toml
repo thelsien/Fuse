@@ -20,6 +20,10 @@ robolectric = "4.13"
 # replay (ENG-9) and persistence (Sprint 2). 1.7.3 is the stable release
 # aligned with Kotlin 2.1.x; the plugin version tracks the Kotlin version.
 kotlinx-serialization = "1.7.3"
+# kotlinx.coroutines — backs the MVI store's reactive state (StateFlow) and the
+# kotlinx-coroutines-test runtime used to drive the store in commonTest. 1.9.0 is
+# the stable release aligned with Kotlin 2.1.x and KMP (JVM + iOS native).
+kotlinx-coroutines = "1.9.0"
 # androidx.compose.ui 1.8.2 == the Compose Multiplatform 1.8.2 baseline. The
 # ui-test-manifest artifact (the empty ComponentActivity that runComposeUiTest
 # launches) has no Compose-MP DSL alias, so it is referenced directly here and
@@ -39,6 +43,10 @@ koin-compose = { module = "io.insert-koin:koin-compose", version.ref = "koin" }
 koin-android = { module = "io.insert-koin:koin-android", version.ref = "koin" }
 # Engine serialization: JSON round-trip for Board/Tile (multiplatform artifact).
 kotlinx-serialization-json = { module = "org.jetbrains.kotlinx:kotlinx-serialization-json", version.ref = "kotlinx-serialization" }
+# Coroutines: StateFlow for the MVI store (commonMain); coroutines-test drives the
+# store deterministically in commonTest (runTest + StandardTestDispatcher).
+kotlinx-coroutines-core = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-core", version.ref = "kotlinx-coroutines" }
+kotlinx-coroutines-test = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-test", version.ref = "kotlinx-coroutines" }
 
 [plugins]
 kotlin-multiplatform = { id = "org.jetbrains.kotlin.multiplatform", version.ref = "kotlin" }

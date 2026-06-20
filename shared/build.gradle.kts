@@ -44,9 +44,13 @@ kotlin {
             implementation(libs.koin.compose)
             // ENG-1: engine serialization (Board/Tile JSON round-trip).
             implementation(libs.kotlinx.serialization.json)
+            // UIB-3: StateFlow-backed MVI store in the presentation layer.
+            implementation(libs.kotlinx.coroutines.core)
         }
         commonTest.dependencies {
             implementation(kotlin("test"))
+            // UIB-3: drive the GameStore deterministically (runTest, dispatchers).
+            implementation(libs.kotlinx.coroutines.test)
             // Koin's test helpers (verify/checkModules) run on every CI target.
             implementation(libs.koin.test)
             // FND-5: Compose Multiplatform UI-test API (`runComposeUiTest`,
