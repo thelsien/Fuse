@@ -8,6 +8,8 @@ plugins {
     alias(libs.plugins.android.library)
     // FND-5: code coverage for this module; reports aggregated at the root.
     alias(libs.plugins.kover)
+    // ENG-1: kotlinx.serialization compiler plugin for @Serializable Board/Tile.
+    alias(libs.plugins.kotlin.serialization)
 }
 
 kotlin {
@@ -40,6 +42,8 @@ kotlin {
             // DI graph is portable code -> Koin lives in commonMain.
             implementation(libs.koin.core)
             implementation(libs.koin.compose)
+            // ENG-1: engine serialization (Board/Tile JSON round-trip).
+            implementation(libs.kotlinx.serialization.json)
         }
         commonTest.dependencies {
             implementation(kotlin("test"))

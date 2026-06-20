@@ -16,6 +16,10 @@ kover = "0.9.1"
 # JVM unit-test target, so the one shared Compose UI test runs HEADLESS in the
 # existing `:shared:testDebugUnitTest` CI step — no device/emulator required.
 robolectric = "4.13"
+# kotlinx.serialization — used by the engine to serialize Board/Tile for
+# replay (ENG-9) and persistence (Sprint 2). 1.7.3 is the stable release
+# aligned with Kotlin 2.1.x; the plugin version tracks the Kotlin version.
+kotlinx-serialization = "1.7.3"
 # androidx.compose.ui 1.8.2 == the Compose Multiplatform 1.8.2 baseline. The
 # ui-test-manifest artifact (the empty ComponentActivity that runComposeUiTest
 # launches) has no Compose-MP DSL alias, so it is referenced directly here and
@@ -33,6 +37,8 @@ koin-core = { module = "io.insert-koin:koin-core", version.ref = "koin" }
 koin-test = { module = "io.insert-koin:koin-test", version.ref = "koin" }
 koin-compose = { module = "io.insert-koin:koin-compose", version.ref = "koin" }
 koin-android = { module = "io.insert-koin:koin-android", version.ref = "koin" }
+# Engine serialization: JSON round-trip for Board/Tile (multiplatform artifact).
+kotlinx-serialization-json = { module = "org.jetbrains.kotlinx:kotlinx-serialization-json", version.ref = "kotlinx-serialization" }
 
 [plugins]
 kotlin-multiplatform = { id = "org.jetbrains.kotlin.multiplatform", version.ref = "kotlin" }
@@ -42,3 +48,5 @@ compose-multiplatform = { id = "org.jetbrains.compose", version.ref = "compose-m
 android-application = { id = "com.android.application", version.ref = "agp" }
 android-library = { id = "com.android.library", version.ref = "agp" }
 kover = { id = "org.jetbrains.kotlinx.kover", version.ref = "kover" }
+# Serialization plugin version is pinned to the Kotlin version (compiler plugin).
+kotlin-serialization = { id = "org.jetbrains.kotlin.plugin.serialization", version.ref = "kotlin" }
