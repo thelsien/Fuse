@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Base application theme. Uses the framework Material theme so no
+         AppCompat/Material dependency is required; the UI itself is Compose. -->
+    <style name="Theme.Fuse" parent="@android:style/Theme.Material.Light.NoActionBar" />
+</resources>
