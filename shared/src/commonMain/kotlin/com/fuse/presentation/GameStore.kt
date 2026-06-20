@@ -108,6 +108,10 @@ class GameStore(
         if (outcome.accepted) {
             gameState = outcome.state
             _state.value = GameUiState.fromAccepted(gameState, outcome)
+            // One-shot win event (UIB-5): fire exactly once on the move that first
+            // reaches the target, alongside the persistent Won phase. See KDoc on
+            // [GameEffect.Won] for why this is an effect, not derived from state.
+            if (outcome.justWon) _effects.tryEmit(GameEffect.Won)
         } else {
             // True no-op: keep gameState; only raise the blocked signals.
             _state.value = _state.value.copy(
@@ -166,6 +170,20 @@ sealed interface GameIntent {
 sealed interface GameEffect {
     /** A swipe that didn't change the board. Fire a nudge/shake/haptic exactly once. */
     data object Blocked : GameEffect
+
+    /**
+     * UIB-5 — the player JUST reached the win target (one-shot win event).
+     *
+     * Emitted exactly once, on the accepted move whose [MoveOutcome.justWon] is `true`
+     * (the first move to reach 2048). It is modeled as a one-shot effect rather than
+     * derived from the persistent [GamePhase.Won] / [GameUiState.justWon] flag so the
+     * win celebration shows ONCE and never re-shows on the subsequent moves the player
+     * makes after choosing "Keep going" — even though the `Won` condition (and the
+     * `justWon` flag value from that move) persist in state. A non-replaying
+     * [kotlinx.coroutines.flow.SharedFlow] is the correct shape for a fire-once event:
+     * it cannot be re-triggered by recomposition or by collecting state late.
+     */
+    data object Won : GameEffect
 }
 
 /**
@@ -207,11 +225,18 @@ data class GameUiState(
     fun tiles(): List<Tile> = board.tiles()
 
     companion object {
-        /** A fresh, in-progress projection of [state] (no last-move events). */
+        /**
+         * A projection of [state] with no last-move events. Used for the initial board
+         * and after a new game. [gameOver] is derived from the phase rather than hardcoded
+         * to `false`, so a store positioned directly at a terminal [GamePhase.Lost] (via
+         * [forState], or a future UIB-6 resume of a finished game) correctly reports
+         * game-over to the overlay/swipe-enable logic.
+         */
         fun playing(state: GameState): GameUiState = GameUiState(
             board = state.board,
             score = state.score,
             phase = state.phase,
+            gameOver = state.phase.isLost,
         )
 
         /** Projection after an ACCEPTED move, carrying that move's events. */
