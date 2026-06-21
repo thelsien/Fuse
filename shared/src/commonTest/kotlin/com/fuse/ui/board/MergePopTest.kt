@@ -116,4 +116,106 @@ class MergePopTest {
         assertEquals(BoardTransition.None, BoardTransition.fromMerges(emptyList()))
         assertFalse(BoardTransition.None.isMergeResult(1))
     }
+
+    // ---- FEL-3: spawn id on the transition --------------------------------
+
+    @Test
+    fun fromOutcomeCarriesSpawnIdAndMergeResults() {
+        val t = BoardTransition.fromOutcome(
+            merges = listOf(merge(resultId = 7, value = 8)),
+            spawnedId = 42L,
+        )
+        assertTrue(t.isMergeResult(7), "merge result preserved")
+        assertTrue(t.isSpawn(42), "spawned id is recognised")
+        assertEquals(42L, t.spawnedId)
+        assertFalse(t.isSpawn(7), "a merge result is not a spawn")
+        assertFalse(t.isSpawn(99), "unrelated id is not a spawn")
+    }
+
+    @Test
+    fun spawnAndMergeAreMutuallyExclusivePerTile() {
+        // Pathological input: the same id is BOTH a merge result and the claimed spawn.
+        // The merge wins; the id must NOT be reported as a spawn (no double animation).
+        val t = BoardTransition.fromOutcome(
+            merges = listOf(merge(resultId = 5, value = 8)),
+            spawnedId = 5L,
+        )
+        assertTrue(t.isMergeResult(5))
+        assertFalse(t.isSpawn(5), "an id that is a merge result is never a spawn")
+        assertNull(t.spawnedId, "the conflicting spawn id is dropped")
+    }
+
+    @Test
+    fun fromOutcomeWithSpawnButNoMergesIsNotNone() {
+        val t = BoardTransition.fromOutcome(merges = emptyList(), spawnedId = 3L)
+        assertTrue(t != BoardTransition.None, "a spawn-only move still has something to animate")
+        assertTrue(t.isSpawn(3))
+        assertFalse(t.isMergeResult(3))
+    }
+
+    @Test
+    fun fromOutcomeWithNothingIsNone() {
+        assertEquals(BoardTransition.None, BoardTransition.fromOutcome(emptyList(), spawnedId = null))
+    }
+
+    @Test
+    fun fromMergesHasNoSpawnId() {
+        val t = BoardTransition.fromMerges(listOf(merge(resultId = 7, value = 8)))
+        assertNull(t.spawnedId, "fromMerges carries no spawn (back-compat)")
+        assertFalse(t.isSpawn(7))
+    }
+
+    @Test
+    fun noneHasNoSpawn() {
+        assertNull(BoardTransition.None.spawnedId)
+        assertFalse(BoardTransition.None.isSpawn(1))
+    }
+
+    // ---- FEL-3: spawn entrance timing (the "after movement settles" gate) -
+
+    @Test
+    fun spawnEntranceIsZeroDuringTheSlide() {
+        // Default timing: slide 110ms, entrance 140ms. Anywhere up to and including the end
+        // of the slide, the entrance progress is exactly 0 — the tile is hidden while things
+        // are still moving. This IS the FEL-3 acceptance criterion, stated numerically.
+        for (t in listOf(0, 1, 50, 109, 110)) {
+            assertEquals(
+                0f,
+                spawnEntranceProgress(elapsedMs = t, slideMs = 110, entranceMs = 140),
+                "entrance must be 0 at t=$t (during/at end of the 110ms slide)",
+            )
+        }
+    }
+
+    @Test
+    fun spawnEntranceRampsAfterTheSlideThenSaturates() {
+        // Just after the slide it starts moving off zero.
+        assertTrue(spawnEntranceProgress(140, slideMs = 110, entranceMs = 140) > 0f)
+        // Halfway through the entrance window (~70ms past the slide) ≈ 0.5.
+        assertEquals(0.5f, spawnEntranceProgress(180, slideMs = 110, entranceMs = 140), absoluteTolerance = 0.01f)
+        // After slide + full entrance it is fully in, and clamps there.
+        assertEquals(1f, spawnEntranceProgress(110 + 140, slideMs = 110, entranceMs = 140))
+        assertEquals(1f, spawnEntranceProgress(10_000, slideMs = 110, entranceMs = 140))
+    }
+
+    @Test
+    fun spawnEntranceSnapsInUnderReducedMotion() {
+        // Reduced motion: slide & entrance are ~1ms, so the entrance is effectively immediate
+        // (no long fade) — but still gated to AFTER the (1ms) slide.
+        assertEquals(0f, spawnEntranceProgress(elapsedMs = 1, slideMs = 1, entranceMs = 1))
+        assertEquals(1f, spawnEntranceProgress(elapsedMs = 2, slideMs = 1, entranceMs = 1))
+    }
+
+    @Test
+    fun spawnEntranceScaleGrowsFromStartToOne() {
+        assertEquals(SPAWN_START_SCALE, spawnEntranceScale(0f), absoluteTolerance = 1e-4f)
+        assertEquals(1f, spawnEntranceScale(1f), absoluteTolerance = 1e-4f)
+        assertTrue(spawnEntranceScale(0.5f) > spawnEntranceScale(0f))
+        assertTrue(spawnEntranceScale(1f) > spawnEntranceScale(0.5f))
+        // Clamps out-of-range progress.
+        assertEquals(spawnEntranceScale(0f), spawnEntranceScale(-1f))
+        assertEquals(spawnEntranceScale(1f), spawnEntranceScale(2f))
+        // Starts visibly below resting scale so it reads as a "grow in".
+        assertTrue(spawnEntranceScale(0f) < 1f)
+    }
 }

@@ -32,6 +32,7 @@ import com.fuse.engine.Tile
 import com.fuse.ui.theme.FuseMotion
 import com.fuse.ui.theme.FuseTheme
 import com.fuse.ui.theme.TileRamp
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 /**
@@ -87,9 +88,18 @@ import kotlinx.coroutines.launch
  * [BoardTransition.None]) ⇒ no pop, identical to FEL-1 behavior, so plain `BoardView(board)`
  * callers are unchanged.
  *
- * ## What this deliberately does NOT do (FEL-3)
+ * ## Spawn entrance (FEL-3)
+ * The [transition] also carries `spawnedId` — the new id of the single tile that spawned on
+ * this move. That tile starts hidden (scaled-down + alpha 0, seeded at composition so there
+ * is no full-size flash) and, AFTER a delay equal to the slide duration (`tileSlideMs`, so it
+ * enters once the board's movement has settled), scales+fades up to its resting state. A
+ * spawn is never also a merge result ([BoardTransition.isSpawn] enforces this), so a given new
+ * id plays AT MOST one of {slide-in-place, FEL-2 pop, FEL-3 entrance}. Under reduced motion the
+ * delay and entrance collapse to ~1ms (an effective snap-in). `transition == null` ⇒ no entrance.
+ *
+ * ## What this deliberately does NOT do
  * The two MERGING SOURCE tiles are not slid INTO the result (they vanish from the new board
- * and the result pops in place). The spawned-tile entrance pop is FEL-3.
+ * and the result pops in place).
  */
 @Composable
 fun BoardView(
@@ -130,6 +140,10 @@ fun BoardView(
             // the one-shot pop/glow. Null for slid/spawned tiles (no pop).
             val popIntensity: Float? =
                 if (transition?.isMergeResult(tile.id) == true) mergeIntensity(tile.value) else null
+            // FEL-3 — true only for the freshly SPAWNED tile (a new id that is NOT a merge
+            // result). isSpawn already enforces the spawn/merge mutual exclusion, so a tile
+            // is at most one of {merge result, spawn}; here they cannot both be set.
+            val isSpawn: Boolean = transition?.isSpawn(tile.id) == true
             key(tile.id) {
                 TileCell(
                     tile = tile,
@@ -138,6 +152,7 @@ fun BoardView(
                     size = cell,
                     motion = motion,
                     popIntensity = popIntensity,
+                    isSpawn = isSpawn,
                 )
             }
         }
@@ -153,6 +168,7 @@ private fun TileCell(
     motion: FuseMotion,
     modifier: Modifier = Modifier,
     popIntensity: Float? = null,
+    isSpawn: Boolean = false,
 ) {
     // One Offset animatable per tile id. This whole composable sits inside key(tile.id),
     // so the remember SURVIVES recomposition for a surviving tile (same id, new target ->
@@ -191,13 +207,38 @@ private fun TileCell(
         }
     }
 
+    // FEL-3 — spawn entrance. The spawned tile is a brand-new id (so these animatables are
+    // FRESH), and it is NOT a merge result (mutual exclusion is enforced upstream by
+    // BoardTransition.isSpawn). It starts HIDDEN (scaled down + transparent) from its very
+    // first frame — seeded at composition time so there is no full-size flash — then, AFTER
+    // a delay equal to the slide duration (so it appears once the board's movement has
+    // settled), scales+fades up to its resting 1.0 / 1.0. Non-spawn tiles seed at 1/1 and
+    // never run this effect, so slid/surviving/merge tiles are unaffected.
+    val entranceScale = remember { Animatable(if (isSpawn) SPAWN_START_SCALE else 1f) }
+    val entranceAlpha = remember { Animatable(if (isSpawn) 0f else 1f) }
+    if (isSpawn) {
+        LaunchedEffect(Unit) {
+            // Wait for the slide to settle, THEN play the entrance — this ordering is the
+            // FEL-3 acceptance criterion ("fades/scales in AFTER the movement settles").
+            delay(motion.tileSlideMs.toLong())
+            launch {
+                entranceAlpha.animateTo(1f, tween(motion.spawnEntranceMs, easing = motion.standardEasing))
+            }
+            entranceScale.animateTo(1f, tween(motion.spawnEntranceMs, easing = motion.standardEasing))
+        }
+    }
+
     val tileColors = TileRamp.forValue(tile.value)
     Box(
         modifier = modifier
             .offset(x = anim.value.x.dp, y = anim.value.y.dp)
             .graphicsLayer {
-                scaleX = pop.value
-                scaleY = pop.value
+                // pop (FEL-2) and entrance (FEL-3) are mutually exclusive per tile, so at
+                // most one of these is ever != its resting value — multiplying composes them
+                // safely either way (the other stays 1.0).
+                scaleX = pop.value * entranceScale.value
+                scaleY = pop.value * entranceScale.value
+                alpha = entranceAlpha.value
             }
             .size(size)
             .clip(FuseTheme.shapes.tile)

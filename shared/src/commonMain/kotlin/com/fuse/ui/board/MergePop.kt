@@ -27,30 +27,57 @@ import kotlin.math.ln
  *
  * @property resultIntensityById result tile id -> its resulting value, for tiles that
  *   should play the pop on this frame. Empty ⇒ nothing pops (equivalent to `null`).
+ * @property spawnedId the id of the tile that SPAWNED on this move (a brand-new id that
+ *   is NOT a merge result), or `null` when nothing spawned (blocked / new-game / resume).
+ *   Drives the FEL-3 entrance (scale+fade, started after the slide settles). A spawned
+ *   tile is never also a merge result — see [isSpawn] / [fromOutcome] for that invariant.
  */
 data class BoardTransition(
     val resultValueById: Map<Long, Int>,
+    val spawnedId: Long? = null,
 ) {
-    /** True if [tileId] is a merge result that should pop this transition. */
+    /** True if [tileId] is a merge result that should pop this transition (FEL-2). */
     fun isMergeResult(tileId: Long): Boolean = resultValueById.containsKey(tileId)
 
     /** Resulting value of the merge that produced [tileId], or `null` if not a result. */
     fun resultValue(tileId: Long): Int? = resultValueById[tileId]
 
+    /**
+     * True if [tileId] is the tile that spawned this move and should play the FEL-3
+     * entrance. Mutually exclusive with [isMergeResult]: a spawn is never a merge result,
+     * so a given new id plays at most one of the two animations.
+     */
+    fun isSpawn(tileId: Long): Boolean = spawnedId != null && tileId == spawnedId &&
+        !isMergeResult(tileId)
+
     companion object {
-        /** No pop — semantically identical to a `null` transition. */
+        /** No pop / no spawn — semantically identical to a `null` transition. */
         val None: BoardTransition = BoardTransition(emptyMap())
 
         /**
          * Builds a transition from a move's [merges] (the store's `lastMerges`).
          * Maps each merge result id to its resulting value so the renderer can pop it.
+         * Carries no spawn id — prefer [fromOutcome] to also animate the spawned tile.
          */
         fun fromMerges(merges: List<BoardMergeEvent>): BoardTransition =
-            if (merges.isEmpty()) {
+            fromOutcome(merges, spawnedId = null)
+
+        /**
+         * FEL-3 — full transition from an accepted move: the [merges] (FEL-2 pops) plus the
+         * [spawnedId] of the tile that appeared (FEL-3 entrance). The spawn id is only kept
+         * when it is NOT also a merge result, preserving the spawn/merge mutual exclusion.
+         * Returns [None] only when there is nothing at all to animate.
+         */
+        fun fromOutcome(merges: List<BoardMergeEvent>, spawnedId: Long?): BoardTransition {
+            val byId = merges.associate { it.resultId to it.resultingValue }
+            // Guard: a spawned tile must never be a merge result too.
+            val spawn = spawnedId?.takeIf { it !in byId }
+            return if (byId.isEmpty() && spawn == null) {
                 None
             } else {
-                BoardTransition(merges.associate { it.resultId to it.resultingValue })
+                BoardTransition(resultValueById = byId, spawnedId = spawn)
             }
+        }
     }
 }
 
@@ -104,3 +131,32 @@ fun mergeGlowPeakAlpha(intensity: Float): Float =
 
 private const val GLOW_ALPHA_MIN = 0.25f
 private const val GLOW_ALPHA_MAX = 0.85f
+
+/**
+ * FEL-3 — the spawn entrance's linear progress in `[0f, 1f]` at [elapsedMs] after the move,
+ * given the [slideMs] (the entrance is held until the slide settles) and the [entranceMs]
+ * (how long the scale+fade takes). Pure so the renderer, tests, and reduced-motion all agree:
+ *
+ *  - While `elapsedMs <= slideMs` it is exactly `0f` — the tile stays hidden DURING the slide,
+ *    which is the acceptance criterion ("enters AFTER the movement settles").
+ *  - Then it ramps linearly to `1f` over [entranceMs], clamped at `1f` afterwards.
+ *
+ * Under reduced motion both durations are ~1ms, so this snaps to `1f` almost immediately.
+ * The renderer applies an easing on top of this for the actual animation; the contract this
+ * function fixes is the *gate* (zero until the slide settles) and the bounds.
+ */
+fun spawnEntranceProgress(elapsedMs: Int, slideMs: Int, entranceMs: Int): Float {
+    if (elapsedMs <= slideMs) return 0f
+    if (entranceMs <= 0) return 1f
+    val into = (elapsedMs - slideMs).toFloat() / entranceMs
+    return into.coerceIn(0f, 1f)
+}
+
+/** FEL-3 — scale at a given entrance [progress]: from [SPAWN_START_SCALE] up to 1.0. */
+fun spawnEntranceScale(progress: Float): Float {
+    val p = progress.coerceIn(0f, 1f)
+    return SPAWN_START_SCALE + (1f - SPAWN_START_SCALE) * p
+}
+
+/** The scale a spawned tile starts at (alpha 0) before its entrance grows it to 1.0. */
+const val SPAWN_START_SCALE = 0.3f

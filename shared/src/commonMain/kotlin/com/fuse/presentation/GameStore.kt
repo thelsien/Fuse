@@ -8,6 +8,7 @@ import com.fuse.engine.Direction
 import com.fuse.engine.GamePhase
 import com.fuse.engine.GameState
 import com.fuse.engine.MoveOutcome
+import com.fuse.engine.Position
 import com.fuse.engine.Score
 import com.fuse.engine.Tile
 import com.fuse.engine.newGame
@@ -161,6 +162,10 @@ class GameStore(
             _state.value = _state.value.copy(
                 lastMoveBlocked = true,
                 lastMerges = emptyList(),
+                // FEL-3 — a blocked move spawns nothing; clear any prior spawn so the
+                // renderer doesn't re-trigger an entrance for a tile that already settled.
+                spawned = null,
+                spawnPosition = null,
             )
             _effects.tryEmit(GameEffect.Blocked)
         }
@@ -274,6 +279,10 @@ sealed interface GameEffect {
  *   for FEL merge animation.
  * @property justWon one-shot win flag from the last accepted move — for UIB-5.
  * @property gameOver `true` once the game is lost — for UIB-5 and to disable input.
+ * @property spawned the tile that appeared on the last accepted move (FEL-3 entrance),
+ *   or `null` on a blocked move / new game / resume (where the "appearance" of tiles is
+ *   the whole board, not a single post-move spawn). Its [Tile.id] targets the entrance.
+ * @property spawnPosition where [spawned] landed, or `null` when nothing spawned.
  */
 data class GameUiState(
     val board: Board,
@@ -283,6 +292,8 @@ data class GameUiState(
     val lastMerges: List<BoardMergeEvent> = emptyList(),
     val justWon: Boolean = false,
     val gameOver: Boolean = false,
+    val spawned: Tile? = null,
+    val spawnPosition: Position? = null,
 ) {
     /** Convenience for the swipe `enabled` flag: input is live unless the game is lost. */
     val isGameOver: Boolean get() = gameOver
@@ -320,6 +331,10 @@ data class GameUiState(
             lastMerges = outcome.merges,
             justWon = outcome.justWon,
             gameOver = outcome.gameOver,
+            // FEL-3 — carry the spawned tile + where it landed so the renderer can target
+            // its entrance precisely (the engine already computed this on the outcome).
+            spawned = outcome.spawned,
+            spawnPosition = outcome.spawnPosition,
         )
     }
 }
