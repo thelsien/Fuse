@@ -93,6 +93,17 @@ class KoinGraphTest : KoinTest {
     }
 
     @Test
+    fun dailyStoreBindingResolves() {
+        // DLY-4 — the Daily Challenge store + its single-slot repository wire up: the store
+        // resolves the DailyClock (today's puzzle) and the DailyRepository (over the test
+        // Settings) and starts today's run at move 0.
+        val koin = startKoin { modules(appModules + testSettingsModule) }.koin
+        val store = koin.get<com.fuse.presentation.DailyStore>()
+        assertEquals(0, store.state.value.moveCount, "daily starts at move 0")
+        assertNotNull(koin.get<com.fuse.data.DailyRepository>())
+    }
+
+    @Test
     fun initKoinCompositionRootStartsTheSameGraph() {
         // The shared composition root the app shells call must produce a graph in
         // which the sample dependency resolves — proving Android/iOS init paths
