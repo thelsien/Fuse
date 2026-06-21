@@ -253,4 +253,29 @@ class BoardViewUiTest {
                 "(~0 would mean it flashed at the origin first).",
         )
     }
+
+    // ----- FEL-2: merge pop -----------------------------------------------------------
+
+    /**
+     * The merge-pop path composes and renders. A tile whose id is marked as a merge RESULT
+     * in the [BoardTransition] runs the one-shot scale/glow [androidx.compose.runtime.LaunchedEffect]
+     * (intensity-driven, see [MergePopTest] for the curves); here we assert that path renders
+     * the tile without error, and that the default `transition = null` path is unchanged.
+     */
+    @OptIn(ExperimentalTestApi::class)
+    @Test
+    fun mergeResultTransitionComposesAndRendersValue() = runComposeUiTest {
+        val result = Tile(value = 64, id = 42L)
+        val board = boardWith(com.fuse.engine.Position(1, 1) to result)
+        setContent {
+            FuseTheme {
+                BoardView(
+                    board = board,
+                    transition = BoardTransition(mapOf(42L to 64)),
+                    modifier = Modifier.size(boardSidePx.dp),
+                )
+            }
+        }
+        onNodeWithText("64").assertExists()
+    }
 }

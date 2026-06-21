@@ -17,8 +17,11 @@ data class FuseMotion(
     val genericMs: Int,
     val mediumMs: Int,
     val slowMs: Int,
+    val mergePopMs: Int,
+    val mergeGlowMs: Int,
     val tileSlideEasing: Easing,
     val standardEasing: Easing,
+    val mergePopEasing: Easing,
     val reduced: Boolean,
 ) {
     companion object {
@@ -26,6 +29,8 @@ data class FuseMotion(
         val TileSlideEasing: Easing = CubicBezierEasing(0.2f, 0.7f, 0.3f, 1.0f)
         // cubic-bezier(.2,.8,.2,1) — standard easing.
         val StandardEasing: Easing = CubicBezierEasing(0.2f, 0.8f, 0.2f, 1.0f)
+        // cubic-bezier(.34,1.56,.64,1) — "back out" overshoot, for the merge-pop bounce.
+        val MergePopEasing: Easing = CubicBezierEasing(0.34f, 1.56f, 0.64f, 1.0f)
 
         /** Default (full) motion matching the prototype. */
         val Default = FuseMotion(
@@ -33,8 +38,11 @@ data class FuseMotion(
             genericMs = 150,   // .15s transform/background
             mediumMs = 170,
             slowMs = 230,
+            mergePopMs = 180,  // FEL-2 — scale-bounce up to peak then settle.
+            mergeGlowMs = 260, // FEL-2 — transient glow fade-out, slightly outlasts the pop.
             tileSlideEasing = TileSlideEasing,
             standardEasing = StandardEasing,
+            mergePopEasing = MergePopEasing,
             reduced = false,
         )
 
@@ -44,6 +52,8 @@ data class FuseMotion(
             genericMs = 1,
             mediumMs = 1,
             slowMs = 1,
+            mergePopMs = 1,
+            mergeGlowMs = 1,
             reduced = true,
         )
     }
