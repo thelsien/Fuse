@@ -50,6 +50,10 @@ kotlin {
             // The common Settings API; platform backends (Android SharedPreferences,
             // iOS NSUserDefaults) come in transitively and are wired via Koin.
             implementation(libs.multiplatform.settings)
+            // SHL-2: Compose-Multiplatform navigation (NavHost/NavController + real back
+            // stack). Drives the Home/Game/Settings app shell and integrates Android
+            // system back via the OnBackPressedDispatcher; pulls compose.ui:ui-backhandler.
+            implementation(libs.navigation.compose)
         }
         commonTest.dependencies {
             implementation(kotlin("test"))

@@ -29,6 +29,15 @@ kotlinx-coroutines = "1.9.0"
 # launches) has no Compose-MP DSL alias, so it is referenced directly here and
 # version-pinned to the same baseline.
 androidx-compose-ui = "1.8.2"
+# SHL-2: JetBrains AndroidX Navigation Compose for Multiplatform. 2.8.0-alpha13 is
+# the navigation-compose release aligned with the Compose Multiplatform 1.8.x baseline
+# (it requires compose.runtime/ui 1.8.0-alpha03 + lifecycle 2.8.4, all subsumed by our
+# pinned CMP 1.8.2 / cached lifecycle 2.8.4). The 2.9.x stable line targets CMP 1.9.x
+# (lifecycle 2.9.x) and would drag the Compose runtime past our 1.8.2 pin, so we stay on
+# the 2.8.0 line. It ships the multiplatform NavHost/NavController (real back stack) and
+# pulls compose.ui:ui-backhandler, giving a common BackHandler + automatic Android
+# system-back integration through the OnBackPressedDispatcher.
+navigation-compose = "2.8.0-alpha13"
 # com.russhwolf:multiplatform-settings — UIB-6 local key-value persistence for the
 # in-progress game blob + best score. 1.2.0 is the stable release aligned with
 # Kotlin 2.1.x / KMP (Android SharedPreferences + iOS NSUserDefaults backends), and
@@ -57,6 +66,9 @@ kotlinx-coroutines-test = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-t
 # Settings API (with platform backends pulled in transitively: SharedPreferences on
 # Android, NSUserDefaults on iOS). `multiplatform-settings-test` provides the
 # in-memory MapSettings used to round-trip the game blob deterministically in tests.
+# SHL-2: idiomatic Compose-Multiplatform navigation (NavHost/NavController, real back
+# stack, Android system-back integration). Used by the app shell in commonMain.
+navigation-compose = { module = "org.jetbrains.androidx.navigation:navigation-compose", version.ref = "navigation-compose" }
 multiplatform-settings = { module = "com.russhwolf:multiplatform-settings", version.ref = "multiplatform-settings" }
 multiplatform-settings-test = { module = "com.russhwolf:multiplatform-settings-test", version.ref = "multiplatform-settings" }
 
