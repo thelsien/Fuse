@@ -12,6 +12,7 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import com.fuse.feedback.ColorblindSettings
 import com.fuse.feedback.ReducedMotionSettings
+import com.fuse.presentation.DailyStreakStore
 import com.fuse.presentation.GameIntent
 import com.fuse.presentation.GameStore
 import com.fuse.ui.daily.DailyScreen
@@ -94,9 +95,14 @@ fun App() {
 @Composable
 private fun AppShell(
     store: GameStore = koinInject(),
+    dailyStreakStore: DailyStreakStore = koinInject(),
     navController: NavHostController = rememberNavController(),
 ) {
     val state by store.state.collectAsState()
+    // DLY-5 — the live daily streak, surfaced on Home's Daily entry. Reactive: solving the
+    // Daily (DailyScreen records it) updates this flow, so popping back to Home shows the
+    // up-to-date streak with no manual refresh.
+    val dailyStreak by dailyStreakStore.state.collectAsState()
 
     NavHost(
         navController = navController,
@@ -129,6 +135,8 @@ private fun AppShell(
                 },
                 // DLY-4 — Daily is now enabled: navigate to the playable Daily screen.
                 dailyEnabled = true,
+                // DLY-5 — surface the live daily streak on the Daily entry ("Daily · 🔥 X").
+                dailyStreak = dailyStreak.current,
                 onOpenDaily = { navController.navigate(FuseDestinations.DAILY) },
                 onOpenSettings = { navController.navigate(FuseDestinations.SETTINGS) },
                 modifier = Modifier.fillMaxSize(),

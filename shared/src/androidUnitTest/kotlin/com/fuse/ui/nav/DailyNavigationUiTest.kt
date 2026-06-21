@@ -14,6 +14,7 @@ import com.fuse.daily.DailyClock
 import com.fuse.daily.DailyPuzzle
 import com.fuse.engine.Board
 import com.fuse.presentation.DailyStore
+import com.fuse.presentation.DailyStreakStore
 import com.fuse.ui.daily.DailyScreen
 import com.fuse.ui.daily.DailyScreenTags
 import com.fuse.ui.home.HomeScreen
@@ -75,7 +76,11 @@ class DailyNavigationUiTest {
                 )
             }
             composable(FuseDestinations.DAILY) {
-                DailyScreen(store = store, onBack = { navController.popBackStack() })
+                DailyScreen(
+                    store = store,
+                    streakStore = DailyStreakStore(clock = FixedClock(LocalDate(2026, 6, 21))),
+                    onBack = { navController.popBackStack() },
+                )
             }
         }
     }

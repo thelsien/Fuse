@@ -1,15 +1,18 @@
 package com.fuse.di
 
 import com.fuse.data.DailyRepository
+import com.fuse.data.DailyStreakRepository
 import com.fuse.data.DefaultGreeting
 import com.fuse.data.GameRepository
 import com.fuse.data.Greeting
 import com.fuse.data.SettingsDailyRepository
+import com.fuse.data.SettingsDailyStreakRepository
 import com.fuse.data.SettingsGameRepository
 import com.fuse.data.platformSettingsModule
 import com.fuse.daily.DailyClock
 import com.fuse.daily.SystemDailyClock
 import com.fuse.presentation.DailyStore
+import com.fuse.presentation.DailyStreakStore
 import com.fuse.domain.GetGreetingUseCase
 import com.fuse.feedback.ColorblindSettings
 import com.fuse.feedback.FeedbackPreferences
@@ -62,6 +65,10 @@ val dataModule: Module = module {
     // DLY-4: the single daily save slot's persistence over the SAME platform `Settings`
     // (independent key from Classic's game blob — see SettingsDailyRepository.KEY_DAILY).
     single<DailyRepository> { SettingsDailyRepository(get()) }
+    // DLY-5: the daily STREAK's persistence over the SAME platform `Settings`, under its OWN
+    // key (fuse.daily.streak — SEPARATE from the per-day puzzle slot fuse.daily.progress) so
+    // the streak outlives every new-day reset of the in-progress puzzle.
+    single<DailyStreakRepository> { SettingsDailyStreakRepository(get()) }
 }
 
 /** Domain layer — use cases. Sample use case consuming the data abstraction. */
@@ -80,6 +87,12 @@ val presentationModule: Module = module {
     // whole app shares one. It resolves the [DailyClock] (today's UTC day → today's puzzle)
     // and the [DailyRepository] (the single slot: resume today / reset on a new day).
     single { DailyStore(clock = get(), repository = get()) }
+    // DLY-5: the Daily STREAK store. `single` — it owns the live, persisted streak shared by
+    // the Daily screen (solved overlay) and Home. It resolves the [DailyClock] (today's day,
+    // for the live-current display) and the [DailyStreakRepository] (its own slot). `DailyScreen`
+    // collects [DailyStore]'s one-shot Solved effect and calls [DailyStreakStore.recordSolved],
+    // so a solve records the streak exactly once (idempotent for the same day).
+    single { DailyStreakStore(clock = get(), repository = get()) }
 }
 
 /**
