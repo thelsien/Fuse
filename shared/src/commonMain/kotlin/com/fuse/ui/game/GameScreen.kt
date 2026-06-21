@@ -24,6 +24,8 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import com.fuse.feedback.HapticsCoordinator
 import com.fuse.feedback.SoundCoordinator
+import com.fuse.feedback.comboCount
+import com.fuse.feedback.isCombo
 import com.fuse.feedback.milestoneReached
 import com.fuse.presentation.GameEffect
 import com.fuse.presentation.GameIntent
@@ -73,6 +75,14 @@ fun GameScreen(
     var milestoneTrigger by remember(store) { mutableStateOf<MilestoneTrigger?>(null) }
     var milestoneNonce by remember(store) { mutableStateOf(0L) }
 
+    // FEL-7 — combo COUNTER + escalating VISUAL cue. A one-shot token (count + nonce) raised below
+    // from a multi-merge `Moved`; the layered [ComboEffect] is keyed on it and (re)plays the
+    // "x{n}" badge pop, then self-dismisses. Same one-shot discipline as the milestone trigger so
+    // it fires ONCE per combo move and never re-shows on later moves/recomposition. The nonce makes
+    // two consecutive same-size combos distinct so the effect restarts.
+    var comboTrigger by remember(store) { mutableStateOf<ComboTrigger?>(null) }
+    var comboNonce by remember(store) { mutableStateOf(0L) }
+
     // FEL-4/FEL-5 — feedback. A thin collector turns the store's one-shot effects into the
     // pure decisions for BOTH channels off the same [GameEffect.Moved] signal:
     //  - haptics: accepted Moved → tick (merge) / thunk (milestone); Blocked → buzz.
@@ -96,6 +106,17 @@ fun GameScreen(
                     milestoneReached(effect.mergedValues)?.let { value ->
                         milestoneNonce += 1
                         milestoneTrigger = MilestoneTrigger(value = value, nonce = milestoneNonce)
+                    }
+                    // FEL-7 — VISUAL only (no extra haptics/sound; FEL-4/5 already fired per merge).
+                    // If this move was a combo (>= 2 merges), raise the one-shot "x{n}" badge on the
+                    // merge count. The nonce makes a repeated same-size combo a distinct token so the
+                    // keyed effect restarts. A move can be BOTH a combo and a milestone — both fire.
+                    if (isCombo(effect.mergedValues)) {
+                        comboNonce += 1
+                        comboTrigger = ComboTrigger(
+                            count = comboCount(effect.mergedValues),
+                            nonce = comboNonce,
+                        )
                     }
                 }
                 GameEffect.Blocked -> haptics.onBlocked()
@@ -124,6 +145,8 @@ fun GameScreen(
         onNewGame = { store.accept(GameIntent.NewGame()) },
         milestoneTrigger = milestoneTrigger,
         onMilestoneDismissed = { milestoneTrigger = null },
+        comboTrigger = comboTrigger,
+        onComboDismissed = { comboTrigger = null },
         showWin = showWin,
         onKeepGoing = { showWin = false },
         onRestart = {
@@ -146,6 +169,8 @@ fun GameScreenContent(
     modifier: Modifier = Modifier,
     milestoneTrigger: MilestoneTrigger? = null,
     onMilestoneDismissed: () -> Unit = {},
+    comboTrigger: ComboTrigger? = null,
+    onComboDismissed: () -> Unit = {},
     showWin: Boolean = false,
     onKeepGoing: () -> Unit = {},
     onRestart: () -> Unit = onNewGame,
@@ -212,6 +237,20 @@ fun GameScreenContent(
             LaunchedEffect(milestoneTrigger) {
                 kotlinx.coroutines.delay(dismissMs.toLong())
                 onMilestoneDismissed()
+            }
+        }
+
+        // FEL-7 — the combo "x{n}" badge, layered over the board. It sits in the top-third (the
+        // [ComboEffect] aligns itself TopCenter) while the milestone burst is centred, so when a
+        // move is BOTH a combo and a milestone the two read cleanly without clobbering each other.
+        // Same self-dismiss discipline as the milestone block: a LaunchedEffect waits out the
+        // effect's lifetime then clears the trigger. The composable no-ops under reduced motion / null.
+        if (comboTrigger != null) {
+            ComboEffect(token = comboTrigger)
+            val comboDismissMs = FuseTheme.motion.comboMs
+            LaunchedEffect(comboTrigger) {
+                kotlinx.coroutines.delay(comboDismissMs.toLong())
+                onComboDismissed()
             }
         }
 
