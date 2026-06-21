@@ -26,6 +26,7 @@ import com.fuse.feedback.NoOpHaptics
 import com.fuse.feedback.NoOpSound
 import com.fuse.feedback.SoundCoordinator
 import com.fuse.feedback.SoundSettings
+import com.fuse.presentation.GameIntent
 import com.fuse.presentation.GameStore
 import com.fuse.ui.game.GameScreen
 import com.fuse.ui.game.GameScreenTags
@@ -108,9 +109,18 @@ class AppNavigationUiTest {
             modifier = Modifier.fillMaxSize(),
         ) {
             composable(FuseDestinations.HOME) {
+                // Mirror App.AppShell's SHL-4 wiring: Continue resumes (navigate only),
+                // New game / Play Classic start fresh as appropriate.
                 HomeScreen(
                     best = state.bestScore,
+                    canResume = state.canResume,
+                    savedScore = state.currentScore,
                     onPlayClassic = { navController.navigate(FuseDestinations.GAME) },
+                    onContinue = { navController.navigate(FuseDestinations.GAME) },
+                    onNewGame = {
+                        store.accept(GameIntent.NewGame())
+                        navController.navigate(FuseDestinations.GAME)
+                    },
                     onOpenDaily = {},
                     onOpenSettings = { navController.navigate(FuseDestinations.SETTINGS) },
                 )
@@ -198,11 +208,63 @@ class AppNavigationUiTest {
         waitForIdle()
         onNodeWithTag(HomeScreenTags.BEST_VALUE).assertTextEquals("4")
 
-        // Re-enter the game — the in-progress game is intact (score still 4, not reset to 0).
-        onNodeWithTag(HomeScreenTags.CLASSIC).performClick()
+        // SHL-4 — the game is now in-progress (a move was played), so Home offers Continue
+        // (the saved game) rather than the single Play Classic CTA.
+        onNodeWithTag(HomeScreenTags.CONTINUE).assertExists()
+        onNodeWithTag(HomeScreenTags.CLASSIC).assertDoesNotExist()
+
+        // Re-enter via Continue — the in-progress game is intact (score still 4, not reset to 0).
+        onNodeWithTag(HomeScreenTags.CONTINUE).performClick()
         waitForIdle()
         onNodeWithTag(ScoreHudTags.BEST_VALUE).assertTextEquals("4")
         onNodeWithTag(ScoreHudTags.SCORE_VALUE).assertTextEquals("4")
+    }
+
+    /**
+     * SHL-4 — the resume-on-launch choice end to end over the real NavHost: after a move the
+     * game is resumable, so Home shows **Continue** (resumes the exact board/score) and **New
+     * game** (resets to a fresh board). Continue must NOT reset; New game must.
+     */
+    @OptIn(ExperimentalTestApi::class)
+    @Test
+    fun homeOffersContinueVsNewGame_continueResumesExactState_newGameResets() = runComposeUiTest {
+        setContent { FuseTheme { NavGraphUnderTest(mergeableStore()) } }
+
+        // Fresh launch (moveCount 0): single Play Classic, no resume choice yet.
+        onNodeWithTag(HomeScreenTags.CLASSIC).assertExists()
+        onNodeWithTag(HomeScreenTags.CONTINUE).assertDoesNotExist()
+
+        // Play a scoring move so the game becomes resumable, then return Home.
+        onNodeWithTag(HomeScreenTags.CLASSIC).performClick()
+        waitForIdle()
+        onNodeWithTag(GameScreenTags.BOARD).performTouchInput { swipeLeft() }
+        waitForIdle()
+        onNodeWithTag(ScoreHudTags.SCORE_VALUE).assertTextEquals("4")
+        onNodeWithTag(GameScreenTags.BACK).performClick()
+        waitForIdle()
+
+        // Home now offers Continue + New game.
+        onNodeWithTag(HomeScreenTags.CONTINUE).assertExists()
+        onNodeWithTag(HomeScreenTags.NEW_GAME).assertExists()
+        onNodeWithTag(HomeScreenTags.CLASSIC).assertDoesNotExist()
+
+        // Continue → the exact saved game (score 4 preserved, not reset).
+        onNodeWithTag(HomeScreenTags.CONTINUE).performClick()
+        waitForIdle()
+        onNodeWithTag(ScoreHudTags.SCORE_VALUE).assertTextEquals("4")
+        onNodeWithTag(GameScreenTags.BACK).performClick()
+        waitForIdle()
+
+        // New game → a fresh board, score reset to 0.
+        onNodeWithTag(HomeScreenTags.NEW_GAME).performClick()
+        waitForIdle()
+        onNodeWithTag(ScoreHudTags.SCORE_VALUE).assertTextEquals("0")
+        onNodeWithTag(GameScreenTags.BACK).performClick()
+        waitForIdle()
+
+        // After New game (moveCount 0) Home reverts to the single Play Classic CTA.
+        onNodeWithTag(HomeScreenTags.CLASSIC).assertExists()
+        onNodeWithTag(HomeScreenTags.CONTINUE).assertDoesNotExist()
     }
 
     @OptIn(ExperimentalTestApi::class)

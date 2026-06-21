@@ -12,6 +12,7 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import com.fuse.feedback.ColorblindSettings
 import com.fuse.feedback.ReducedMotionSettings
+import com.fuse.presentation.GameIntent
 import com.fuse.presentation.GameStore
 import com.fuse.ui.game.GameScreen
 import com.fuse.ui.home.HomeScreen
@@ -102,9 +103,29 @@ private fun AppShell(
         modifier = Modifier.fillMaxSize(),
     ) {
         composable(FuseDestinations.HOME) {
+            // SHL-4 — the store auto-resumes a saved game on init and projects `canResume`
+            // reactively, so Home offers Continue + New game when a resumable game exists and
+            // a single Play Classic otherwise. Collecting `state` here keeps the choice
+            // reactive: starting a new game (moveCount 0) or losing flips canResume back to
+            // false, so popping to Home shows the right options.
+            //
+            //  - Play Classic (shown only when NOT resumable, i.e. the store already holds a
+            //    fresh moveCount-0 game): just navigate — the held game IS the fresh board, so
+            //    there is nothing to reset (and re-entering preserves an in-progress game).
+            //  - Continue (resumable): just navigate to the already-resumed game — score/board
+            //    intact, NO NewGame.
+            //  - New game (resumable): explicitly start a fresh board (NewGame, best preserved,
+            //    overwrites the saved blob) THEN navigate.
             HomeScreen(
                 best = state.bestScore,
+                canResume = state.canResume,
+                savedScore = state.currentScore,
                 onPlayClassic = { navController.navigate(FuseDestinations.GAME) },
+                onContinue = { navController.navigate(FuseDestinations.GAME) },
+                onNewGame = {
+                    store.accept(GameIntent.NewGame())
+                    navController.navigate(FuseDestinations.GAME)
+                },
                 onOpenDaily = { /* SHL: Sprint 5 — no-op placeholder */ },
                 onOpenSettings = { navController.navigate(FuseDestinations.SETTINGS) },
                 modifier = Modifier.fillMaxSize(),
