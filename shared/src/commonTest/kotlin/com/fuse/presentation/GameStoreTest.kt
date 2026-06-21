@@ -165,13 +165,18 @@ class GameStoreTest {
 
         assertTrue(store.state.value.justWon, "the winning move sets justWon")
         assertTrue(store.state.value.phase is GamePhase.Won, "phase is Won after reaching target")
-        assertEquals(listOf<GameEffect>(GameEffect.Won), received, "exactly one Won effect")
+        // FEL-4 — accepted moves now also emit a per-move Moved effect, so filter to Won.
+        assertEquals(
+            listOf<GameEffect>(GameEffect.Won),
+            received.filterIsInstance<GameEffect.Won>(),
+            "exactly one Won effect",
+        )
 
         // A subsequent accepted move must NOT re-emit Won (the win is a one-shot).
         store.accept(GameIntent.Move(Direction.RIGHT))
         assertEquals(
             listOf<GameEffect>(GameEffect.Won),
-            received,
+            received.filterIsInstance<GameEffect.Won>(),
             "Won fires once; later moves past 2048 do not re-emit it",
         )
         job.cancel()
@@ -233,6 +238,60 @@ class GameStoreTest {
         val store = GameStore(initialSeed = 3L, initialBest = 1500L)
         assertEquals(1500L, store.state.value.bestScore, "persisted best (UIB-6 seam) carried in")
         assertEquals(0L, store.state.value.currentScore)
+    }
+
+    @OptIn(ExperimentalCoroutinesApi::class)
+    @Test
+    fun acceptedMergeMoveEmitsMovedEffectWithMergeValues() = runTest {
+        // [2,2] LEFT merges to a 4.
+        val store = GameStore.forState(twoTwoRowState())
+        val received = mutableListOf<GameEffect>()
+        val job = launch(UnconfinedTestDispatcher(testScheduler)) {
+            store.effects.toList(received)
+        }
+
+        store.accept(GameIntent.Move(Direction.LEFT))
+
+        val moved = received.filterIsInstance<GameEffect.Moved>()
+        assertEquals(1, moved.size, "an accepted move emits exactly one Moved effect")
+        assertEquals(listOf(4), moved.single().mergedValues, "carries the merge result value")
+        assertFalse(moved.single().justWon, "a 4 is not a win")
+        job.cancel()
+    }
+
+    @OptIn(ExperimentalCoroutinesApi::class)
+    @Test
+    fun winningMoveEmitsMovedWithJustWon() = runTest {
+        val store = GameStore.forState(nearWinLeftState())
+        val received = mutableListOf<GameEffect>()
+        val job = launch(UnconfinedTestDispatcher(testScheduler)) {
+            store.effects.toList(received)
+        }
+
+        store.accept(GameIntent.Move(Direction.LEFT))
+
+        val moved = received.filterIsInstance<GameEffect.Moved>().single()
+        assertEquals(listOf(2048), moved.mergedValues)
+        assertTrue(moved.justWon, "the move reaching 2048 marks justWon on the Moved effect")
+        job.cancel()
+    }
+
+    @OptIn(ExperimentalCoroutinesApi::class)
+    @Test
+    fun blockedMoveEmitsNoMovedEffect() = runTest {
+        val store = GameStore.forState(blockedLeftState())
+        val received = mutableListOf<GameEffect>()
+        val job = launch(UnconfinedTestDispatcher(testScheduler)) {
+            store.effects.toList(received)
+        }
+
+        store.accept(GameIntent.Move(Direction.LEFT))
+
+        assertTrue(
+            received.filterIsInstance<GameEffect.Moved>().isEmpty(),
+            "a blocked no-op emits Blocked, never Moved",
+        )
+        job.cancel()
     }
 
     // --- fixtures ---------------------------------------------------------------

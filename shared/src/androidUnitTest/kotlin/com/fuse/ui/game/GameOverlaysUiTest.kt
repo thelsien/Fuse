@@ -12,6 +12,9 @@ import com.fuse.engine.Board
 import com.fuse.engine.GamePhase
 import com.fuse.engine.GameState
 import com.fuse.engine.Score
+import com.fuse.feedback.HapticsCoordinator
+import com.fuse.feedback.HapticsSettings
+import com.fuse.feedback.NoOpHaptics
 import com.fuse.presentation.GameStore
 import com.fuse.ui.theme.FuseTheme
 import org.junit.Assert.assertTrue
@@ -37,6 +40,10 @@ import org.robolectric.annotation.GraphicsMode
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
 @Config(sdk = [34])
 class GameOverlaysUiTest {
+
+    /** FEL-4 — a Koin-free coordinator so these UI tests still need no Koin. */
+    private fun testHaptics(): HapticsCoordinator =
+        HapticsCoordinator(NoOpHaptics, HapticsSettings())
 
     private fun stateFromBoard(
         board: Board,
@@ -83,7 +90,7 @@ class GameOverlaysUiTest {
                 score = Score(current = 1234L, best = 1234L),
             ),
         )
-        setContent { FuseTheme { GameScreen(store = store) } }
+        setContent { FuseTheme { GameScreen(store = store, haptics = testHaptics()) } }
 
         // Lose overlay is up with the final score; best preserved.
         onNodeWithTag(GameOverlayTags.LOSE_ROOT).assertExists()
@@ -105,7 +112,7 @@ class GameOverlaysUiTest {
     @Test
     fun winOverlayShowsOnceAndKeepGoingContinuesPlay() = runComposeUiTest {
         val store = GameStore.forState(stateFromBoard(nearWinBoard()))
-        setContent { FuseTheme { GameScreen(store = store) } }
+        setContent { FuseTheme { GameScreen(store = store, haptics = testHaptics()) } }
 
         // Not won yet.
         onNodeWithTag(GameOverlayTags.WIN_ROOT).assertDoesNotExist()
@@ -143,7 +150,7 @@ class GameOverlaysUiTest {
     @Test
     fun winOverlayRestartStartsNewGame() = runComposeUiTest {
         val store = GameStore.forState(stateFromBoard(nearWinBoard()))
-        setContent { FuseTheme { GameScreen(store = store) } }
+        setContent { FuseTheme { GameScreen(store = store, haptics = testHaptics()) } }
 
         onNodeWithTag(GameScreenTags.BOARD).performTouchInput { swipeLeft() }
         waitForIdle()

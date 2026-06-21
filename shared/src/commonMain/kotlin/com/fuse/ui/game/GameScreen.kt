@@ -22,6 +22,7 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
+import com.fuse.feedback.HapticsCoordinator
 import com.fuse.presentation.GameEffect
 import com.fuse.presentation.GameIntent
 import com.fuse.presentation.GameStore
@@ -56,8 +57,25 @@ import org.koin.compose.koinInject
 fun GameScreen(
     modifier: Modifier = Modifier,
     store: GameStore = koinInject(),
+    haptics: HapticsCoordinator = koinInject(),
 ) {
     val state by store.state.collectAsState()
+
+    // FEL-4 — haptic feedback. A thin collector turns the store's one-shot effects into
+    // the pure decision: an accepted Moved → tick (merge) / thunk (milestone) and a
+    // Blocked → buzz, each gated by the haptics toggle inside [HapticsCoordinator]. Driven
+    // off the non-replaying `effects` flow so each cue fires exactly once per move and is
+    // never re-triggered by recomposition. (Real haptic feel only on a physical device;
+    // emulators/simulators run this harmlessly with no vibration.)
+    LaunchedEffect(store, haptics) {
+        store.effects.collect { effect ->
+            when (effect) {
+                is GameEffect.Moved -> haptics.onMove(effect.mergedValues, effect.justWon)
+                GameEffect.Blocked -> haptics.onBlocked()
+                GameEffect.Won -> Unit
+            }
+        }
+    }
 
     // UIB-5 — win-once-then-keep-going.
     //

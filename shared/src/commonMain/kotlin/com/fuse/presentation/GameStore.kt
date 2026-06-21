@@ -153,6 +153,17 @@ class GameStore(
             // UIB-6: persist the new in-progress game + best after every accepted move,
             // so a kill-and-relaunch resumes the exact same board/score/rng state.
             persist()
+            // FEL-4 — one-shot per-move feedback signal. A move's merge results +
+            // justWon are carried on [GameUiState] too, but a one-shot effect is the
+            // right shape to DRIVE a fire-once haptic: it fires exactly once per accepted
+            // move and never replays on recomposition (unlike collecting state late). The
+            // pure [com.fuse.feedback.HapticsCoordinator] decides tick vs thunk from this.
+            _effects.tryEmit(
+                GameEffect.Moved(
+                    mergedValues = outcome.merges.map { it.resultingValue },
+                    justWon = outcome.justWon,
+                ),
+            )
             // One-shot win event (UIB-5): fire exactly once on the move that first
             // reaches the target, alongside the persistent Won phase. See KDoc on
             // [GameEffect.Won] for why this is an effect, not derived from state.
@@ -247,6 +258,27 @@ sealed interface GameIntent {
 sealed interface GameEffect {
     /** A swipe that didn't change the board. Fire a nudge/shake/haptic exactly once. */
     data object Blocked : GameEffect
+
+    /**
+     * FEL-4 — an ACCEPTED move just reduced (one-shot, fired once per accepted move).
+     *
+     * Carries exactly the signals the haptic decision needs, so a collector can drive
+     * feedback without re-reading state:
+     *  - [mergedValues] — the `resultingValue` of each merge this move (empty for a pure
+     *    slide). A non-empty list ⇒ a "tick"; a value in the milestone set ⇒ a "thunk".
+     *  - [justWon] — `true` iff this move first reached the win target (also ⇒ "thunk").
+     *
+     * Modeled as a one-shot effect (not derived from [GameUiState.lastMerges]) so the
+     * haptic fires once on the move and never re-fires on a later recomposition or a late
+     * state collection. Sound (FEL-5) can ride the very same effect.
+     *
+     * @property mergedValues per-merge result values produced by this move.
+     * @property justWon whether this move first reached the win target.
+     */
+    data class Moved(
+        val mergedValues: List<Int>,
+        val justWon: Boolean,
+    ) : GameEffect
 
     /**
      * UIB-5 — the player JUST reached the win target (one-shot win event).

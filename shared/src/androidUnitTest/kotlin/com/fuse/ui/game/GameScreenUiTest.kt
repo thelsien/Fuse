@@ -12,6 +12,9 @@ import com.fuse.engine.Board
 import com.fuse.engine.GamePhase
 import com.fuse.engine.GameState
 import com.fuse.engine.Score
+import com.fuse.feedback.HapticsCoordinator
+import com.fuse.feedback.HapticsSettings
+import com.fuse.feedback.NoOpHaptics
 import com.fuse.presentation.GameStore
 import com.fuse.ui.theme.FuseTheme
 import org.junit.Test
@@ -29,6 +32,10 @@ import org.robolectric.annotation.GraphicsMode
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
 @Config(sdk = [34])
 class GameScreenUiTest {
+
+    /** FEL-4 — a Koin-free coordinator so the UI tests still need no Koin (NoOp haptics). */
+    private fun testHaptics(): HapticsCoordinator =
+        HapticsCoordinator(NoOpHaptics, HapticsSettings())
 
     private fun stateFromBoard(board: Board): GameState = GameState(
         board = board,
@@ -57,7 +64,7 @@ class GameScreenUiTest {
         )
 
         setContent {
-            FuseTheme { GameScreen(store = store) }
+            FuseTheme { GameScreen(store = store, haptics = testHaptics()) }
         }
 
         // Before: two 2-tiles, score 0.
@@ -89,7 +96,7 @@ class GameScreenUiTest {
         )
 
         setContent {
-            FuseTheme { GameScreen(store = store) }
+            FuseTheme { GameScreen(store = store, haptics = testHaptics()) }
         }
 
         onNodeWithTag(ScoreHudTags.SCORE_VALUE).assertTextEquals("0")
@@ -119,7 +126,7 @@ class GameScreenUiTest {
             ),
         )
         setContent {
-            FuseTheme { GameScreen(store = store) }
+            FuseTheme { GameScreen(store = store, haptics = testHaptics()) }
         }
 
         onNodeWithTag(GameScreenTags.BOARD).performTouchInput { swipeLeft() }

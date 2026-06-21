@@ -6,6 +6,9 @@ import com.fuse.data.Greeting
 import com.fuse.data.SettingsGameRepository
 import com.fuse.data.platformSettingsModule
 import com.fuse.domain.GetGreetingUseCase
+import com.fuse.feedback.HapticsCoordinator
+import com.fuse.feedback.HapticsSettings
+import com.fuse.feedback.platformHapticsModule
 import com.fuse.presentation.GameStore
 import com.fuse.presentation.SamplePresenter
 import org.koin.core.module.Module
@@ -48,6 +51,19 @@ val presentationModule: Module = module {
     single { GameStore(repository = get()) }
 }
 
+/**
+ * Feedback layer (FEL-4) — haptic feedback wiring.
+ *
+ * Binds the enable/disable toggle ([HapticsSettings], default-on; SHL-3 will persist/flip
+ * it) and the pure [HapticsCoordinator] that maps move outcomes to [com.fuse.feedback.Haptics]
+ * calls. The platform [com.fuse.feedback.Haptics] itself is bound by [platformHapticsModule]
+ * (Vibrator on Android, UIFeedbackGenerator on iOS), which must precede this module.
+ */
+val feedbackModule: Module = module {
+    single { HapticsSettings() }
+    factory { HapticsCoordinator(haptics = get(), settings = get()) }
+}
+
 /** UI layer — composable-scoped providers (FND-4 design tokens etc.). Empty. */
 val uiModule: Module = module {
 }
@@ -60,8 +76,10 @@ val uiModule: Module = module {
 val appModules: List<Module> = listOf(
     engineModule,
     platformSettingsModule,
+    platformHapticsModule,
     dataModule,
     domainModule,
     presentationModule,
+    feedbackModule,
     uiModule,
 )
