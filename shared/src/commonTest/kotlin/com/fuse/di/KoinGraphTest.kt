@@ -104,6 +104,17 @@ class KoinGraphTest : KoinTest {
     }
 
     @Test
+    fun dailyStreakBindingsResolveAndDefaultToZero() {
+        // DLY-5 — the streak repository + store wire up over the test Settings. A fresh graph
+        // (no prior completion) projects a zeroed streak (current 0, longest 0).
+        val koin = startKoin { modules(appModules + testSettingsModule) }.koin
+        assertNotNull(koin.get<com.fuse.data.DailyStreakRepository>())
+        val streak = koin.get<com.fuse.presentation.DailyStreakStore>().state.value
+        assertEquals(0, streak.current, "no completions → current 0")
+        assertEquals(0, streak.longest, "no completions → longest 0")
+    }
+
+    @Test
     fun initKoinCompositionRootStartsTheSameGraph() {
         // The shared composition root the app shells call must produce a graph in
         // which the sample dependency resolves — proving Android/iOS init paths

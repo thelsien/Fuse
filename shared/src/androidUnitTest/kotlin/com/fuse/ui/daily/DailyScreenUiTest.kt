@@ -12,6 +12,8 @@ import androidx.compose.ui.test.swipeLeft
 import com.fuse.daily.DailyPuzzle
 import com.fuse.engine.Board
 import com.fuse.presentation.DailyStore
+import com.fuse.presentation.DailyStreakState
+import com.fuse.presentation.DailyStreakStore
 import com.fuse.presentation.DailyUiState
 import com.fuse.ui.theme.FuseTheme
 import com.fuse.daily.DailyClock
@@ -59,6 +61,9 @@ class DailyScreenUiTest {
         puzzle = trivialPuzzle(),
     )
 
+    /** A streak store with the NoOp repo default — records a fresh streak (1) on solve. */
+    private fun streakStore() = DailyStreakStore(clock = FixedClock(LocalDate(2026, 6, 21)))
+
     private fun unsolvedState() = DailyUiState(
         board = trivialPuzzle().startBoard,
         moveCount = 3,
@@ -97,7 +102,7 @@ class DailyScreenUiTest {
     @Test
     fun aSwipeThatChangesBoardUpdatesTheCounter() = runComposeUiTest {
         val store = trivialStore()
-        setContent { FuseTheme { DailyScreen(store = store) } }
+        setContent { FuseTheme { DailyScreen(store = store, streakStore = streakStore()) } }
 
         onNodeWithTag(DailyHudTags.MOVES).assertTextEquals("0")
         onNodeWithTag(DailyScreenTags.BOARD).performTouchInput { swipeLeft() }
@@ -109,7 +114,7 @@ class DailyScreenUiTest {
 
     @OptIn(ExperimentalTestApi::class)
     @Test
-    fun undoAndRestartReachTheStoreAndRevertMoves() = runComposeUiTest {
+    fun undoReachesTheStoreAndRevertsMoves() = runComposeUiTest {
         // A 2-move puzzle so a productive move leaves an unsolved, undoable run.
         val puzzle = DailyPuzzle(
             seed = 0L,
@@ -125,7 +130,7 @@ class DailyScreenUiTest {
             par = 2,
         )
         val store = DailyStore(clock = FixedClock(LocalDate(2026, 6, 21)), puzzle = puzzle)
-        setContent { FuseTheme { DailyScreen(store = store) } }
+        setContent { FuseTheme { DailyScreen(store = store, streakStore = streakStore()) } }
 
         onNodeWithTag(DailyScreenTags.BOARD).performTouchInput { swipeLeft() }
         waitForIdle()
@@ -134,11 +139,34 @@ class DailyScreenUiTest {
         onNodeWithTag(DailyScreenTags.UNDO).performClick()
         waitForIdle()
         onNodeWithTag(DailyHudTags.MOVES).assertTextEquals("0")
+    }
 
-        // Restart after a move also returns to 0.
+    @OptIn(ExperimentalTestApi::class)
+    @Test
+    fun restartReachesTheStoreAndRevertsMoves() = runComposeUiTest {
+        // Restart path, isolated in its own composition (a single swipe from the start board —
+        // the same proven gesture as the other tests — so it doesn't chain a second swipe after
+        // an undo, which could be coalesced under the shared Robolectric harness).
+        val puzzle = DailyPuzzle(
+            seed = 0L,
+            startBoard = Board.fromValues(
+                arrayOf(
+                    intArrayOf(8, 0, 0, 8),
+                    intArrayOf(0, 0, 0, 0),
+                    intArrayOf(8, 0, 0, 8),
+                    intArrayOf(0, 0, 0, 0),
+                ),
+            ),
+            target = 32,
+            par = 2,
+        )
+        val store = DailyStore(clock = FixedClock(LocalDate(2026, 6, 21)), puzzle = puzzle)
+        setContent { FuseTheme { DailyScreen(store = store, streakStore = streakStore()) } }
+
         onNodeWithTag(DailyScreenTags.BOARD).performTouchInput { swipeLeft() }
         waitForIdle()
         onNodeWithTag(DailyHudTags.MOVES).assertTextEquals("1")
+
         onNodeWithTag(DailyScreenTags.RESTART).performClick()
         waitForIdle()
         onNodeWithTag(DailyHudTags.MOVES).assertTextEquals("0")
@@ -148,11 +176,44 @@ class DailyScreenUiTest {
     @Test
     fun solvingShowsTheSolvedOverlay() = runComposeUiTest {
         val store = trivialStore()
-        setContent { FuseTheme { DailyScreen(store = store) } }
+        setContent { FuseTheme { DailyScreen(store = store, streakStore = streakStore()) } }
         onNodeWithTag(DailyScreenTags.BOARD).performTouchInput { swipeLeft() }
         waitForIdle()
         onNodeWithTag(DailyScreenTags.SOLVED_OVERLAY).assertIsDisplayed()
         onNodeWithTag(DailyScreenTags.SOLVED_SUMMARY).assertTextContains("Par 1", substring = true)
         onNodeWithTag(DailyScreenTags.SHARE_PLACEHOLDER).assertExists()
+    }
+
+    @OptIn(ExperimentalTestApi::class)
+    @Test
+    fun solvedOverlayShowsTheStreak() = runComposeUiTest {
+        // DLY-5 — the solved overlay surfaces the current + longest streak.
+        val solved = unsolvedState().copy(solved = true, winningMoves = 4)
+        setContent {
+            FuseTheme {
+                DailyScreenContent(
+                    state = solved,
+                    streak = DailyStreakState(current = 3, longest = 7),
+                    onSwipe = {},
+                    onUndo = {},
+                    onRestart = {},
+                )
+            }
+        }
+        onNodeWithTag(DailyScreenTags.SOLVED_STREAK).assertIsDisplayed()
+        onNodeWithTag(DailyScreenTags.SOLVED_STREAK).assertTextContains("3", substring = true)
+        onNodeWithTag(DailyScreenTags.SOLVED_STREAK).assertTextContains("Best 7", substring = true)
+    }
+
+    @OptIn(ExperimentalTestApi::class)
+    @Test
+    fun solvingARealRunRecordsAndShowsStreakOne() = runComposeUiTest {
+        // DLY-5 end-to-end: a live solve drives the recorder (NoOp repo → fresh streak 1) and
+        // the overlay shows it.
+        val store = trivialStore()
+        setContent { FuseTheme { DailyScreen(store = store, streakStore = streakStore()) } }
+        onNodeWithTag(DailyScreenTags.BOARD).performTouchInput { swipeLeft() }
+        waitForIdle()
+        onNodeWithTag(DailyScreenTags.SOLVED_STREAK).assertTextContains("Streak: 1", substring = true)
     }
 }

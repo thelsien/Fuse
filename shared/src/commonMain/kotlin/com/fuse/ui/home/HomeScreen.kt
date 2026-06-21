@@ -70,6 +70,8 @@ import com.fuse.ui.theme.FuseTheme
  * @param onOpenSettings invoked when the player taps **Settings** (SHL-3 wires the real screen).
  * @param modifier outer modifier.
  * @param dailyEnabled whether the Daily entry point is active; defaults to `false` (placeholder).
+ * @param dailyStreak DLY-5 — the LIVE current daily streak (0 when none/broken). When the Daily
+ *   entry is enabled and this is > 0, the button surfaces it ("Daily · 🔥 X"). Defaults to `0`.
  * @param canResume SHL-4 — `true` iff a resumable in-progress game exists. When `true`, Home shows
  *   **Continue** + **New game** instead of the single **Play Classic** CTA. Defaults to `false`.
  * @param savedScore SHL-4 — the saved game's current score, shown on the **Continue** button for
@@ -87,6 +89,7 @@ fun HomeScreen(
     onOpenSettings: () -> Unit,
     modifier: Modifier = Modifier,
     dailyEnabled: Boolean = false,
+    dailyStreak: Int = 0,
     canResume: Boolean = false,
     savedScore: Long = 0L,
     onContinue: () -> Unit = onPlayClassic,
@@ -162,7 +165,13 @@ fun HomeScreen(
                     )
                 }
                 GradientButton(
-                    label = if (dailyEnabled) "Daily" else "Daily — Coming soon",
+                    // DLY-5 — when Daily is live and a streak is running, surface it on the
+                    // entry point ("Daily · 🔥 X"); otherwise plain "Daily" (or the placeholder).
+                    label = when {
+                        !dailyEnabled -> "Daily — Coming soon"
+                        dailyStreak > 0 -> "Daily · 🔥 $dailyStreak"
+                        else -> "Daily"
+                    },
                     gradient = FuseBrand.goldGradient,
                     contentColor = FuseBrand.navy,
                     onClick = onOpenDaily,

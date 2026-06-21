@@ -18,6 +18,7 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
@@ -29,8 +30,11 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.fuse.engine.Direction
+import com.fuse.presentation.DailyEffect
 import com.fuse.presentation.DailyIntent
 import com.fuse.presentation.DailyStore
+import com.fuse.presentation.DailyStreakState
+import com.fuse.presentation.DailyStreakStore
 import com.fuse.presentation.DailyUiState
 import com.fuse.ui.board.BoardTransition
 import com.fuse.ui.board.BoardView
@@ -63,11 +67,28 @@ import org.koin.compose.koinInject
 fun DailyScreen(
     modifier: Modifier = Modifier,
     store: DailyStore = koinInject(),
+    streakStore: DailyStreakStore = koinInject(),
     onBack: (() -> Unit)? = null,
 ) {
     val state by store.state.collectAsState()
+    val streak by streakStore.state.collectAsState()
+
+    // DLY-5 — record the streak on a LIVE solve. The store's one-shot DailyEffect.Solved fires
+    // exactly once on the winning move (not on resume of an already-solved run), mirroring how
+    // GameScreen collects effects. recordSolved is idempotent for the same day, so even a
+    // re-observed effect never double-counts. The streakStore re-reads + persists, then its
+    // state flow updates the overlay's "Streak: X" live.
+    LaunchedEffect(store, streakStore) {
+        store.effects.collect { effect ->
+            when (effect) {
+                is DailyEffect.Solved -> streakStore.recordSolved(effect.dayNumber)
+            }
+        }
+    }
+
     DailyScreenContent(
         state = state,
+        streak = streak,
         onSwipe = { store.accept(DailyIntent.Move(it)) },
         onUndo = { store.accept(DailyIntent.Undo) },
         onRestart = { store.accept(DailyIntent.Restart) },
@@ -84,6 +105,7 @@ fun DailyScreenContent(
     onUndo: () -> Unit,
     onRestart: () -> Unit,
     modifier: Modifier = Modifier,
+    streak: DailyStreakState = DailyStreakState(),
     onBack: (() -> Unit)? = null,
 ) {
     val c = FuseTheme.colors
@@ -162,6 +184,7 @@ fun DailyScreenContent(
             SolvedOverlay(
                 moves = state.winningMoves ?: state.moveCount,
                 par = state.par,
+                streak = streak,
             )
         }
     }
@@ -243,11 +266,20 @@ private fun ControlButton(
 }
 
 /**
- * The solved overlay: "Solved in N moves! (Par P)", a placeholder for the DLY-7 share
- * button, and a "come back tomorrow" note. The board is locked while this shows.
+ * The solved overlay: "Solved in N moves! (Par P)", the DLY-5 **streak** line
+ * ("🔥 Streak: X · Best Y"), a placeholder for the DLY-7 share button, and a "come back
+ * tomorrow" note. The board is locked while this shows.
+ *
+ * @param streak the displayable streak — `current` is the live value (0 when broken),
+ *   `longest` the all-time best. Rendered as a token-styled line under the move summary.
  */
 @Composable
-private fun SolvedOverlay(moves: Int, par: Int, modifier: Modifier = Modifier) {
+private fun SolvedOverlay(
+    moves: Int,
+    par: Int,
+    streak: DailyStreakState,
+    modifier: Modifier = Modifier,
+) {
     val c = FuseTheme.colors
     Box(
         modifier = modifier
@@ -276,6 +308,19 @@ private fun SolvedOverlay(moves: Int, par: Int, modifier: Modifier = Modifier) {
                 style = FuseTheme.type.headingM.copy(color = c.text),
                 textAlign = TextAlign.Center,
                 modifier = Modifier.testTag(DailyScreenTags.SOLVED_SUMMARY),
+            )
+            // DLY-5 — the streak line. current = the live consecutive-day streak (1+ after this
+            // solve; 0 only if somehow not yet recorded), longest = the all-time best.
+            Text(
+                "🔥 Streak: ${streak.current} · Best ${streak.longest}",
+                style = FuseTheme.type.headingM.copy(color = c.gold),
+                textAlign = TextAlign.Center,
+                modifier = Modifier
+                    .testTag(DailyScreenTags.SOLVED_STREAK)
+                    .semantics {
+                        contentDescription =
+                            "Daily streak ${streak.current}, best ${streak.longest}"
+                    },
             )
             // DLY-7 — share button placeholder (disabled). Wired in DLY-7 to build a
             // shareable result card from moves-vs-par + the day number.
@@ -312,6 +357,9 @@ object DailyScreenTags {
     const val RESTART: String = "daily_restart"
     const val SOLVED_OVERLAY: String = "daily_solved_overlay"
     const val SOLVED_SUMMARY: String = "daily_solved_summary"
+
+    /** DLY-5 — the streak line on the solved overlay ("🔥 Streak: X · Best Y"). */
+    const val SOLVED_STREAK: String = "daily_solved_streak"
     const val SHARE_PLACEHOLDER: String = "daily_share_placeholder"
 }
 

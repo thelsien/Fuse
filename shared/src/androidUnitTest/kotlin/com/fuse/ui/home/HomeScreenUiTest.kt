@@ -2,6 +2,7 @@ package com.fuse.ui.home
 
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.assertHasClickAction
+import androidx.compose.ui.test.assertTextContains
 import androidx.compose.ui.test.assertTextEquals
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performClick
@@ -124,6 +125,44 @@ class HomeScreenUiTest {
 
         onNodeWithTag(HomeScreenTags.DAILY).assertHasClickAction().performClick()
         assertEquals(1, dailyTaps)
+    }
+
+    @OptIn(ExperimentalTestApi::class)
+    @Test
+    fun dailyEntryShowsTheStreakWhenRunning() = runComposeUiTest {
+        // DLY-5 — when Daily is enabled and a streak is running, the entry surfaces it.
+        setContent {
+            FuseTheme {
+                HomeScreen(
+                    best = 0L,
+                    onPlayClassic = {},
+                    onOpenDaily = {},
+                    onOpenSettings = {},
+                    dailyEnabled = true,
+                    dailyStreak = 5,
+                )
+            }
+        }
+        onNodeWithTag(HomeScreenTags.DAILY).assertTextContains("5", substring = true)
+    }
+
+    @OptIn(ExperimentalTestApi::class)
+    @Test
+    fun dailyEntryShowsPlainLabelWhenNoStreak() = runComposeUiTest {
+        // DLY-5 — a broken/absent streak (0) shows the plain "Daily" label (no "🔥").
+        setContent {
+            FuseTheme {
+                HomeScreen(
+                    best = 0L,
+                    onPlayClassic = {},
+                    onOpenDaily = {},
+                    onOpenSettings = {},
+                    dailyEnabled = true,
+                    dailyStreak = 0,
+                )
+            }
+        }
+        onNodeWithTag(HomeScreenTags.DAILY).assertTextEquals("Daily")
     }
 
     @Test
