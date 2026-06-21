@@ -67,13 +67,13 @@ class SoundCoordinator(
 
     companion object {
         /**
-         * The tile values that ring a [Sound.milestoneSting] (the same notable powers of two
-         * as [HapticsCoordinator.MILESTONES], kept in sync on purpose so the channels agree on
-         * what "milestone" means). Lower tiles merge constantly and would make the sting lose
-         * meaning. 2048 is included for symmetry, though first-2048 plays the *win* sting via
-         * `justWon`; a later customised win target below 2048 still stings on 2048.
+         * The tile values that ring a [Sound.milestoneSting]. Aliases the single shared
+         * [com.fuse.feedback.MILESTONES] set (the same notable powers of two used by haptics
+         * and the FEL-6 visual), kept in one place so the channels can never drift. 2048 is
+         * included for symmetry, though first-2048 plays the *win* sting via `justWon`; a later
+         * customised win target below 2048 still stings on 2048.
          */
-        val MILESTONES: Set<Int> = setOf(512, 1024, 2048)
+        val MILESTONES: Set<Int> = com.fuse.feedback.MILESTONES
 
         /**
          * The lowest tile value a merge can produce (two 2-tiles → 4), the floor of the pitch
