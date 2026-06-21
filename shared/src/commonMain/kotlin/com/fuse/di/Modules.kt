@@ -8,6 +8,7 @@ import com.fuse.data.platformSettingsModule
 import com.fuse.domain.GetGreetingUseCase
 import com.fuse.feedback.HapticsCoordinator
 import com.fuse.feedback.HapticsSettings
+import com.fuse.feedback.ReducedMotionSettings
 import com.fuse.feedback.SoundCoordinator
 import com.fuse.feedback.SoundSettings
 import com.fuse.feedback.platformHapticsModule
@@ -72,6 +73,12 @@ val feedbackModule: Module = module {
     // (AudioTrack synth on Android, AVAudioEngine synth on iOS), which must precede this.
     single { SoundSettings() }
     factory { SoundCoordinator(sound = get(), settings = get()) }
+    // FEL-8 — the single reduced-motion switch. A THIRD independent toggle
+    // ([ReducedMotionSettings], default-OFF = full motion). `App()` resolves it and feeds its
+    // value into `FuseTheme(reducedMotion = …)`, so one flip collapses every FEL-1..7 animation
+    // (slides/overshoot snap; milestone burst+flash and combo badge suppressed). Compose-state-
+    // backed, so flipping it (future SHL-3 settings screen) recomposes live without a restart.
+    single { ReducedMotionSettings() }
 }
 
 /** UI layer — composable-scoped providers (FND-4 design tokens etc.). Empty. */

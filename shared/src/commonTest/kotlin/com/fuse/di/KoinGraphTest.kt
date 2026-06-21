@@ -3,6 +3,7 @@ package com.fuse.di
 import com.fuse.data.Greeting
 import com.fuse.domain.GetGreetingUseCase
 import com.fuse.feedback.HapticsSettings
+import com.fuse.feedback.ReducedMotionSettings
 import com.fuse.presentation.SamplePresenter
 import org.koin.core.context.startKoin
 import org.koin.core.context.stopKoin
@@ -10,6 +11,7 @@ import org.koin.test.KoinTest
 import kotlin.test.AfterTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
 
@@ -53,6 +55,18 @@ class KoinGraphTest : KoinTest {
         // sample-chain test deliberately avoids resolving `Context`-backed bindings.)
         val koin = startKoin { modules(appModules) }.koin
         assertTrue(koin.get<HapticsSettings>().hapticsEnabled, "haptics default ON")
+    }
+
+    @Test
+    fun reducedMotionToggleBindingResolvesAndDefaultsOff() {
+        // FEL-8 — the single reduced-motion switch is bound and default-OFF (full motion). An
+        // INDEPENDENT toggle from haptics/sound. `App()` resolves this and feeds it into
+        // `FuseTheme(reducedMotion = …)`; default OFF means full motion out of the box.
+        val koin = startKoin { modules(appModules) }.koin
+        assertFalse(
+            koin.get<ReducedMotionSettings>().reducedMotionEnabled,
+            "reduced motion default OFF",
+        )
     }
 
     @Test
