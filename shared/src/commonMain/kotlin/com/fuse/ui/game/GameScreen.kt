@@ -57,9 +57,11 @@ import org.koin.compose.koinInject
  *
  * @param store the MVI store; defaults to the Koin-provided singleton.
  * @param modifier outer modifier.
- * @param onBack SHL-1 — back affordance to the Home screen. A no-op by default so existing
- *   call sites/tests are unchanged; `App()` passes a callback that returns to Home. The button
- *   only renders when a real handler is supplied. SHL-2 replaces this with nav back handling.
+ * @param onBack back affordance to the Home screen — `null` by default so existing call
+ *   sites/tests are unchanged; the button only renders when a handler is supplied. SHL-2 wires
+ *   this to the nav back stack: `App()` passes `navController.popBackStack()`, so this in-screen
+ *   "‹ Home" button is the single coherent back (it is the iOS back affordance, and on Android it
+ *   sits alongside the NavHost's automatic system-back handling — both pop to Home).
  */
 @Composable
 fun GameScreen(
@@ -193,8 +195,8 @@ fun GameScreenContent(
                 .padding(16.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
-            // SHL-1 — back affordance to Home (only when a handler is supplied by App()).
-            // TEMPORARY: SHL-2 replaces this with proper nav back. Left-aligned, above the HUD.
+            // SHL-2 — back affordance to Home (only when a handler is supplied by App()).
+            // Nav-driven: App() wires this to navController.popBackStack(). Left-aligned, above HUD.
             if (onBack != null) {
                 androidx.compose.material3.TextButton(
                     onClick = onBack,
@@ -303,7 +305,7 @@ object GameScreenTags {
     const val BOARD: String = "game_board"
     const val NEW_GAME: String = "game_new_game"
 
-    /** SHL-1 — the back-to-Home affordance (rendered only when `onBack` is supplied). */
+    /** SHL-2 — the nav-driven back-to-Home affordance (rendered only when `onBack` is supplied). */
     const val BACK: String = "game_back"
 }
 
