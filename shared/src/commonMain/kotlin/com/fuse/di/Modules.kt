@@ -6,9 +6,12 @@ import com.fuse.data.Greeting
 import com.fuse.data.SettingsGameRepository
 import com.fuse.data.platformSettingsModule
 import com.fuse.domain.GetGreetingUseCase
+import com.fuse.feedback.ColorblindSettings
+import com.fuse.feedback.FeedbackPreferences
 import com.fuse.feedback.HapticsCoordinator
 import com.fuse.feedback.HapticsSettings
 import com.fuse.feedback.ReducedMotionSettings
+import com.fuse.feedback.SettingsFeedbackPreferences
 import com.fuse.feedback.SoundCoordinator
 import com.fuse.feedback.SoundSettings
 import com.fuse.feedback.platformHapticsModule
@@ -64,21 +67,46 @@ val presentationModule: Module = module {
  * (Vibrator on Android, UIFeedbackGenerator on iOS), which must precede this module.
  */
 val feedbackModule: Module = module {
-    single { HapticsSettings() }
+    // SHL-3 — the persistence seam for the four settings toggles. Backed by the SAME platform
+    // `Settings` (SharedPreferences / NSUserDefaults) as [SettingsGameRepository], so all of
+    // Fuse's local state lives in one store. Each holder below is SEEDED from this at startup
+    // (relaunch restores the user's choices) and writes through on flip via its `setEnabled`.
+    single<FeedbackPreferences> { SettingsFeedbackPreferences(get()) }
+
+    // FEL-4 / SHL-3 — haptics gate, seeded from + write-through to persistence (default ON).
+    single { HapticsSettings(hapticsEnabled = get<FeedbackPreferences>().loadHaptics(), preferences = get()) }
     factory { HapticsCoordinator(haptics = get(), settings = get()) }
-    // FEL-5 — sound effects wiring. A SEPARATE mute toggle ([SoundSettings], default-on; a
+    // FEL-5 / SHL-3 — sound effects wiring. A SEPARATE mute toggle ([SoundSettings], default-on; a
     // player may mute sound while keeping haptics) and the pure [SoundCoordinator] mapping
     // move outcomes to [com.fuse.feedback.Sound] calls (climbing merge tone + milestone/win
     // stings). The platform [com.fuse.feedback.Sound] is bound by [platformSoundModule]
-    // (AudioTrack synth on Android, AVAudioEngine synth on iOS), which must precede this.
-    single { SoundSettings() }
+    // (AudioTrack synth on Android, AVAudioEngine synth on iOS), which must precede this. Seeded
+    // from + write-through to persistence (default ON).
+    single { SoundSettings(soundEnabled = get<FeedbackPreferences>().loadSound(), preferences = get()) }
     factory { SoundCoordinator(sound = get(), settings = get()) }
-    // FEL-8 — the single reduced-motion switch. A THIRD independent toggle
+    // FEL-8 / SHL-3 — the single reduced-motion switch. A THIRD independent toggle
     // ([ReducedMotionSettings], default-OFF = full motion). `App()` resolves it and feeds its
     // value into `FuseTheme(reducedMotion = …)`, so one flip collapses every FEL-1..7 animation
     // (slides/overshoot snap; milestone burst+flash and combo badge suppressed). Compose-state-
-    // backed, so flipping it (future SHL-3 settings screen) recomposes live without a restart.
-    single { ReducedMotionSettings() }
+    // backed, so flipping it from the SHL-3 settings screen recomposes live without a restart.
+    // Seeded from + write-through to persistence (default OFF).
+    single {
+        ReducedMotionSettings(
+            reducedMotionEnabled = get<FeedbackPreferences>().loadReducedMotion(),
+            preferences = get(),
+        )
+    }
+    // SHL-3 — colorblind-mode toggle. A FOURTH independent toggle ([ColorblindSettings],
+    // default-OFF). `App()` resolves it and feeds its value into `FuseTheme(colorblind = …)`, so a
+    // flip re-themes live (same chain as reduced-motion). The colorblind-SAFE palette behind the
+    // flag is ACC-1 (Sprint 10); SHL-3 ships the persisted, live toggle + seam. Seeded from +
+    // write-through to persistence (default OFF).
+    single {
+        ColorblindSettings(
+            colorblindEnabled = get<FeedbackPreferences>().loadColorblind(),
+            preferences = get(),
+        )
+    }
 }
 
 /** UI layer — composable-scoped providers (FND-4 design tokens etc.). Empty. */

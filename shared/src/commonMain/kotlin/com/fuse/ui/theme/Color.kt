@@ -51,6 +51,21 @@ data class FuseColors(
     /** True for the dark palette so consumers (status bar, etc.) can branch. */
     val isDark: Boolean,
 ) {
+    /**
+     * SHL-3 — the **colorblind-mode** variant of this palette.
+     *
+     * SHL-3 wires the colorblind toggle end to end (persisted + live through
+     * `FuseTheme(colorblind = …)`), but the colorblind-SAFE palette itself is **ACC-1**
+     * (Sprint 10). For now this returns a near-identity copy so flipping the flag flows through
+     * the theme with no visible regression and no crash.
+     *
+     * **ACC-1 fills this in:** replace the body with the real colorblind-safe semantic palette
+     * (and pair it with the tile-pattern overlay) — every call site already reads
+     * [LocalFuseColors], so ACC-1 changes ONLY this function (and [TileRamp] for patterns), nothing
+     * else.
+     */
+    fun colorblind(): FuseColors = this // TODO(ACC-1): swap for the colorblind-safe palette.
+
     companion object {
         val Dark = FuseColors(
             bg = Color(0xFF0A0E26),

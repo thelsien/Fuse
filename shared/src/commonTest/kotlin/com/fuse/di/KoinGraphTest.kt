@@ -4,10 +4,13 @@ import com.fuse.data.Greeting
 import com.fuse.domain.GetGreetingUseCase
 import com.fuse.feedback.HapticsSettings
 import com.fuse.feedback.ReducedMotionSettings
-import com.fuse.presentation.SamplePresenter
+import com.russhwolf.settings.MapSettings
+import com.russhwolf.settings.Settings
 import org.koin.core.context.startKoin
 import org.koin.core.context.stopKoin
+import org.koin.dsl.module
 import org.koin.test.KoinTest
+import com.fuse.presentation.SamplePresenter
 import kotlin.test.AfterTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -25,6 +28,16 @@ class KoinGraphTest : KoinTest {
 
     @AfterTest
     fun tearDown() = stopKoin()
+
+    /**
+     * SHL-3 — overrides the platform `Settings` (whose Android actual needs a `Context` the app
+     * shell supplies but a plain JVM Koin test does not) with an in-memory `MapSettings`. This is
+     * the same `Settings` the feedback persistence ([com.fuse.feedback.SettingsFeedbackPreferences],
+     * which seeds the settings holders) resolves, so the toggle bindings construct in tests.
+     */
+    private val testSettingsModule = module {
+        single<Settings> { MapSettings() }
+    }
 
     @Test
     fun graphStartsAndResolvesSampleDependencyChain() {
@@ -53,7 +66,7 @@ class KoinGraphTest : KoinTest {
         // the Haptics actual needs a `Context` from the graph — supplied only by the real
         // app shell — so resolving it in a plain JVM Koin test would fail, exactly as the
         // sample-chain test deliberately avoids resolving `Context`-backed bindings.)
-        val koin = startKoin { modules(appModules) }.koin
+        val koin = startKoin { modules(appModules + testSettingsModule) }.koin
         assertTrue(koin.get<HapticsSettings>().hapticsEnabled, "haptics default ON")
     }
 
@@ -62,7 +75,7 @@ class KoinGraphTest : KoinTest {
         // FEL-8 — the single reduced-motion switch is bound and default-OFF (full motion). An
         // INDEPENDENT toggle from haptics/sound. `App()` resolves this and feeds it into
         // `FuseTheme(reducedMotion = …)`; default OFF means full motion out of the box.
-        val koin = startKoin { modules(appModules) }.koin
+        val koin = startKoin { modules(appModules + testSettingsModule) }.koin
         assertFalse(
             koin.get<ReducedMotionSettings>().reducedMotionEnabled,
             "reduced motion default OFF",

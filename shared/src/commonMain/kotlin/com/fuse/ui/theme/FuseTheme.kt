@@ -35,29 +35,37 @@ fun FuseTheme(
     darkTheme: Boolean = true,
     colors: FuseColors = if (darkTheme) FuseColors.Dark else FuseColors.Light,
     reducedMotion: Boolean = false,
+    colorblind: Boolean = false,
     content: @Composable () -> Unit,
 ) {
     val motion = if (reducedMotion) FuseMotion.Reduced else FuseMotion.Default
-    val materialScheme = if (colors.isDark) {
+    // SHL-3 — the colorblind-mode SEAM. SHL-3 delivers the persisted, live-flipping toggle
+    // (App() reads ColorblindSettings and passes `colorblind = …` here); the actual
+    // colorblind-safe palette + tile patterns are ACC-1 (Sprint 10). For now `colorblind = true`
+    // maps to a near-identity palette (FuseColors.colorblind()) so the flag flows end to end with
+    // no visible regression; ACC-1 only has to fill that palette (and add patterns) behind THIS
+    // flag — no call site changes.
+    val effectiveColors = if (colorblind) colors.colorblind() else colors
+    val materialScheme = if (effectiveColors.isDark) {
         darkColorScheme(
-            primary = colors.accent,
-            background = colors.bg,
-            surface = colors.card,
-            onBackground = colors.text,
-            onSurface = colors.text,
+            primary = effectiveColors.accent,
+            background = effectiveColors.bg,
+            surface = effectiveColors.card,
+            onBackground = effectiveColors.text,
+            onSurface = effectiveColors.text,
         )
     } else {
         lightColorScheme(
-            primary = colors.accent,
-            background = colors.bg,
-            surface = colors.card,
-            onBackground = colors.text,
-            onSurface = colors.text,
+            primary = effectiveColors.accent,
+            background = effectiveColors.bg,
+            surface = effectiveColors.card,
+            onBackground = effectiveColors.text,
+            onSurface = effectiveColors.text,
         )
     }
 
     CompositionLocalProvider(
-        LocalFuseColors provides colors,
+        LocalFuseColors provides effectiveColors,
         LocalFuseMotion provides motion,
     ) {
         MaterialTheme(colorScheme = materialScheme) {

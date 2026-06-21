@@ -1,31 +1,45 @@
 package com.fuse.feedback
 
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
+
 /**
- * FEL-5 — the mute toggle that gates all sound effects.
+ * FEL-5 / SHL-3 — the mute toggle that gates all sound effects.
  *
  * ## Separate from haptics, on purpose
- * Sound and haptics are independent channels a player tunes separately (mute the phone in
- * a meeting but keep the buzz in your hand, or vice-versa). So this is a DISTINCT holder
- * from [HapticsSettings] with its own [soundEnabled] flag — never share one toggle for both.
+ * Sound and haptics are independent channels a player tunes separately (mute the phone in a
+ * meeting but keep the buzz in your hand, or vice-versa). So this is a DISTINCT holder from
+ * [HapticsSettings] with its own [soundEnabled] flag — never share one toggle for both.
  *
- * ## Why a holder (and not just a `Boolean`)
- * The story requires a working mute toggle, but the Settings *screen* that flips it is
- * Sprint 4 (`SHL-3`). So FEL-5 plumbs the seam without building the UI: an injectable holder
- * with [soundEnabled] defaulting to `true` (sound ON out of the box). The [SoundCoordinator]
- * reads it on every event and short-circuits when it is `false`, so *one* check mutes
- * everything.
+ * ## SHL-3 — Compose-state-backed + persisted
+ * [soundEnabled] is now backed by a Compose [mutableStateOf] (like [ReducedMotionSettings]) so the
+ * Settings `Switch` reflects and drives it. The [SoundCoordinator] reads it at dispatch time, so a
+ * flip mutes/unmutes from the **next event** with no restart (applied live).
  *
- * ## What SHL-3 will do here
- * SHL-3 will (a) add the Settings UI that flips this flag, and (b) back it with the
- * UIB-6-style `multiplatform-settings` persistence (same pattern as `SettingsGameRepository`
- * and the planned `HapticsSettings` persistence). Either swap this in-memory holder for a
- * `Settings`-backed implementation of the same shape, or keep this class and make
- * [soundEnabled] read/write through `Settings`. The coordinator and platform impls need no
- * change — the gate stays exactly here.
+ * Persistence delegates to [FeedbackPreferences]: the holder is **seeded** from the persisted
+ * value (the Koin graph passes a [SettingsFeedbackPreferences]-seeded `soundEnabled` at startup, so
+ * a relaunch restores the user's choice) and **writes through** on every flip via [setEnabled].
+ * Tests/previews use the [NoOpFeedbackPreferences] default, so no real `Settings` is required.
  *
- * @property soundEnabled `true` to allow sound effects; `false` mutes all of them.
- *   Mutable so a future settings toggle can flip it live; defaults to `true`.
+ * @param soundEnabled the initial mute value (seeded from persistence by Koin; defaults ON for
+ *   direct construction in tests/previews).
+ * @param preferences the write-through persistence seam; defaults to [NoOpFeedbackPreferences].
  */
 class SoundSettings(
-    var soundEnabled: Boolean = true,
-)
+    soundEnabled: Boolean = true,
+    private val preferences: FeedbackPreferences = NoOpFeedbackPreferences,
+) {
+    /**
+     * `true` to allow sound effects; `false` mutes all of them. Compose-state-backed so a flip
+     * recomposes readers. Flip via [setEnabled] to also persist; the setter stays public so
+     * existing call sites that assign directly keep compiling (those simply don't persist).
+     */
+    var soundEnabled: Boolean by mutableStateOf(soundEnabled)
+
+    /** Flip the mute AND persist the new value so it survives relaunch (the Settings-screen path). */
+    fun setEnabled(enabled: Boolean) {
+        soundEnabled = enabled
+        preferences.saveSound(enabled)
+    }
+}

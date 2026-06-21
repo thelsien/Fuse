@@ -124,7 +124,20 @@ class AppNavigationUiTest {
                 )
             }
             composable(FuseDestinations.SETTINGS) {
-                SettingsScreen(onBack = { navController.popBackStack() })
+                // SHL-3 — drive the presentational Settings overload (explicit values + no-op
+                // toggles) so this nav test needs no Koin; the holder-bound overload is covered by
+                // SettingsScreenUiTest. We only assert the route + back here.
+                SettingsScreen(
+                    sound = true,
+                    haptics = true,
+                    reducedMotion = false,
+                    colorblind = false,
+                    onToggleSound = {},
+                    onToggleHaptics = {},
+                    onToggleReducedMotion = {},
+                    onToggleColorblind = {},
+                    onBack = { navController.popBackStack() },
+                )
             }
         }
     }
@@ -150,7 +163,7 @@ class AppNavigationUiTest {
 
     @OptIn(ExperimentalTestApi::class)
     @Test
-    fun settingsFromHomeShowsPlaceholder_thenBackReturnsHome() = runComposeUiTest {
+    fun settingsFromHomeShowsScreen_thenBackReturnsHome() = runComposeUiTest {
         setContent { FuseTheme { NavGraphUnderTest(mergeableStore()) } }
 
         onNodeWithTag(HomeScreenTags.SETTINGS).performClick()
