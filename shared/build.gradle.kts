@@ -54,6 +54,11 @@ kotlin {
             // stack). Drives the Home/Game/Settings app shell and integrates Android
             // system back via the OnBackPressedDispatcher; pulls compose.ui:ui-backhandler.
             implementation(libs.navigation.compose)
+            // DLY-1: kotlinx-datetime — LocalDate / Clock.System / TimeZone.UTC for the
+            // Daily Challenge clock seam (resolve TODAY's UTC calendar day). The pure
+            // date->seed / day-number functions take a LocalDate; only the DailyClock
+            // touches the system clock, and that's injected via Koin.
+            implementation(libs.kotlinx.datetime)
         }
         commonTest.dependencies {
             implementation(kotlin("test"))

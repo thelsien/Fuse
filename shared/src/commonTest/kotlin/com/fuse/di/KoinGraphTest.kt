@@ -1,5 +1,6 @@
 package com.fuse.di
 
+import com.fuse.daily.DailyClock
 import com.fuse.data.Greeting
 import com.fuse.domain.GetGreetingUseCase
 import com.fuse.feedback.HapticsSettings
@@ -80,6 +81,15 @@ class KoinGraphTest : KoinTest {
             koin.get<ReducedMotionSettings>().reducedMotionEnabled,
             "reduced motion default OFF",
         )
+    }
+
+    @Test
+    fun dailyClockBindingResolves() {
+        // DLY-1 — the Daily Challenge clock seam is bound (device-backed
+        // SystemDailyClock). DLY-3/DLY-4 resolve this for TODAY's UTC day; here we
+        // only assert the binding constructs and yields a non-null calendar day.
+        val koin = startKoin { modules(appModules + testSettingsModule) }.koin
+        assertNotNull(koin.get<DailyClock>().todayUtc())
     }
 
     @Test

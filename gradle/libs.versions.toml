@@ -44,6 +44,13 @@ navigation-compose = "2.8.0-alpha13"
 # ships the `multiplatform-settings-test` (in-memory MapSettings) artifact used for
 # deterministic round-trip tests in commonTest.
 multiplatform-settings = "1.2.0"
+# DLY-1: kotlinx-datetime — the KMP-standard date/time library. 0.6.2 is the stable
+# release on the 0.6.x line, built against Kotlin 2.x and aligned with Kotlin 2.1.21
+# (the 0.7+ line relocates Clock/Instant into kotlin.time and tracks a newer Kotlin/
+# coroutines baseline, so we stay on 0.6.x). Provides LocalDate / Clock.System /
+# TimeZone.UTC used to derive TODAY's UTC calendar day for the Daily Challenge. Uses
+# the device clock only — no network — matching the local-only daily design.
+kotlinx-datetime = "0.6.2"
 
 [libraries]
 robolectric = { module = "org.robolectric:robolectric", version.ref = "robolectric" }
@@ -71,6 +78,9 @@ kotlinx-coroutines-test = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-t
 navigation-compose = { module = "org.jetbrains.androidx.navigation:navigation-compose", version.ref = "navigation-compose" }
 multiplatform-settings = { module = "com.russhwolf:multiplatform-settings", version.ref = "multiplatform-settings" }
 multiplatform-settings-test = { module = "com.russhwolf:multiplatform-settings-test", version.ref = "multiplatform-settings" }
+# DLY-1: kotlinx-datetime — LocalDate / Clock.System / TimeZone.UTC for the Daily
+# Challenge clock seam (today's UTC calendar day). Multiplatform artifact (JVM + iOS).
+kotlinx-datetime = { module = "org.jetbrains.kotlinx:kotlinx-datetime", version.ref = "kotlinx-datetime" }
 
 [plugins]
 kotlin-multiplatform = { id = "org.jetbrains.kotlin.multiplatform", version.ref = "kotlin" }
