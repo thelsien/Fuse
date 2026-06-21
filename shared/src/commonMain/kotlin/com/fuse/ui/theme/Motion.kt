@@ -21,6 +21,7 @@ data class FuseMotion(
     val mergeGlowMs: Int,
     val spawnEntranceMs: Int,
     val milestoneMs: Int,
+    val comboMs: Int,
     val tileSlideEasing: Easing,
     val standardEasing: Easing,
     val mergePopEasing: Easing,
@@ -44,6 +45,7 @@ data class FuseMotion(
             mergeGlowMs = 260, // FEL-2 — transient glow fade-out, slightly outlasts the pop.
             spawnEntranceMs = 140, // FEL-3 — new-tile scale+fade entrance (after the slide settles).
             milestoneMs = 900,     // FEL-6 — milestone flash + particle burst lifetime (self-dismiss).
+            comboMs = 650,         // FEL-7 — combo "x{n}" badge pop-in + fade lifetime (self-dismiss).
             tileSlideEasing = TileSlideEasing,
             standardEasing = StandardEasing,
             mergePopEasing = MergePopEasing,
@@ -60,6 +62,7 @@ data class FuseMotion(
             mergeGlowMs = 1,
             spawnEntranceMs = 1,
             milestoneMs = 1,
+            comboMs = 1,
             reduced = true,
         )
     }
