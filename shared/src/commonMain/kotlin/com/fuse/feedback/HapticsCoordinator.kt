@@ -63,11 +63,9 @@ class HapticsCoordinator(
     companion object {
         /**
          * The tile values that count as a "milestone" worthy of the heavier thunk.
-         * Notable powers of two near/at the win target; reaching one of these the moment a
-         * merge produces it is a satisfying beat. Kept as an explicit set so it is easy to
-         * tune and is pure-tested. (Lower tiles like 128/256 merge constantly and would make
-         * the thunk lose meaning.)
+         * Aliases the single shared [com.fuse.feedback.MILESTONES] set so haptics, sound, and
+         * the FEL-6 visual all agree on what a milestone is (one definition, one place to tune).
          */
-        val MILESTONES: Set<Int> = setOf(512, 1024, 2048)
+        val MILESTONES: Set<Int> = com.fuse.feedback.MILESTONES
     }
 }

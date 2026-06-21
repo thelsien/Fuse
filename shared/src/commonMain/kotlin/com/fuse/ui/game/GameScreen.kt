@@ -24,6 +24,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import com.fuse.feedback.HapticsCoordinator
 import com.fuse.feedback.SoundCoordinator
+import com.fuse.feedback.milestoneReached
 import com.fuse.presentation.GameEffect
 import com.fuse.presentation.GameIntent
 import com.fuse.presentation.GameStore
@@ -31,6 +32,7 @@ import com.fuse.presentation.GameUiState
 import com.fuse.ui.board.BoardTransition
 import com.fuse.ui.board.BoardView
 import com.fuse.ui.input.swipeable
+import com.fuse.ui.theme.FuseTheme
 import kotlinx.coroutines.flow.filterIsInstance
 import org.koin.compose.koinInject
 
@@ -63,6 +65,14 @@ fun GameScreen(
 ) {
     val state by store.state.collectAsState()
 
+    // FEL-6 — milestone VISUAL trigger. A one-shot token (value + nonce) raised below from a
+    // milestone `Moved`; the layered [MilestoneEffect] is keyed on it and (re)plays the
+    // flash + particle burst, then self-dismisses. Driven from the one-shot effect (not state)
+    // so it fires ONCE when the milestone is reached and never re-shows on later moves. A
+    // monotonic nonce makes two consecutive same-tier milestones distinct so the effect restarts.
+    var milestoneTrigger by remember(store) { mutableStateOf<MilestoneTrigger?>(null) }
+    var milestoneNonce by remember(store) { mutableStateOf(0L) }
+
     // FEL-4/FEL-5 — feedback. A thin collector turns the store's one-shot effects into the
     // pure decisions for BOTH channels off the same [GameEffect.Moved] signal:
     //  - haptics: accepted Moved → tick (merge) / thunk (milestone); Blocked → buzz.
@@ -79,6 +89,14 @@ fun GameScreen(
                 is GameEffect.Moved -> {
                     haptics.onMove(effect.mergedValues, effect.justWon)
                     sound.onMove(effect.mergedValues, effect.justWon)
+                    // FEL-6 — VISUAL only (no haptics/sound here; FEL-4/5 already fired above).
+                    // If this move produced a milestone tile, raise the one-shot visual on the
+                    // HIGHEST milestone reached. The nonce makes a repeated same-tier milestone a
+                    // distinct token so the keyed effect restarts.
+                    milestoneReached(effect.mergedValues)?.let { value ->
+                        milestoneNonce += 1
+                        milestoneTrigger = MilestoneTrigger(value = value, nonce = milestoneNonce)
+                    }
                 }
                 GameEffect.Blocked -> haptics.onBlocked()
                 GameEffect.Won -> Unit
@@ -104,6 +122,8 @@ fun GameScreen(
         state = state,
         onSwipe = { store.accept(GameIntent.Move(it)) },
         onNewGame = { store.accept(GameIntent.NewGame()) },
+        milestoneTrigger = milestoneTrigger,
+        onMilestoneDismissed = { milestoneTrigger = null },
         showWin = showWin,
         onKeepGoing = { showWin = false },
         onRestart = {
@@ -124,6 +144,8 @@ fun GameScreenContent(
     onSwipe: (com.fuse.engine.Direction) -> Unit,
     onNewGame: () -> Unit,
     modifier: Modifier = Modifier,
+    milestoneTrigger: MilestoneTrigger? = null,
+    onMilestoneDismissed: () -> Unit = {},
     showWin: Boolean = false,
     onKeepGoing: () -> Unit = {},
     onRestart: () -> Unit = onNewGame,
@@ -177,6 +199,19 @@ fun GameScreenContent(
                 modifier = Modifier.testTag(GameScreenTags.NEW_GAME),
             ) {
                 Text("New game")
+            }
+        }
+
+        // FEL-6 — the milestone celebration (flash + particle burst), layered over the board but
+        // BELOW the end-game overlays (a win/lose card should dominate). Self-dismisses: once a
+        // trigger is set, a LaunchedEffect waits out the effect's lifetime then clears it back to
+        // null so it does not linger. The composable itself no-ops under reduced motion / null.
+        if (milestoneTrigger != null) {
+            MilestoneEffect(token = milestoneTrigger)
+            val dismissMs = FuseTheme.motion.milestoneMs
+            LaunchedEffect(milestoneTrigger) {
+                kotlinx.coroutines.delay(dismissMs.toLong())
+                onMilestoneDismissed()
             }
         }
 
