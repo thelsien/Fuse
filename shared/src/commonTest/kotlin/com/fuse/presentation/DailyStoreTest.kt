@@ -12,7 +12,11 @@ import com.russhwolf.settings.Settings
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.yield
+import kotlinx.datetime.Instant
 import kotlinx.datetime.LocalDate
+import kotlinx.datetime.TimeZone
+import kotlinx.datetime.atStartOfDayIn
+import kotlin.time.Duration.Companion.hours
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -32,6 +36,10 @@ class DailyStoreTest {
     /** A fixed-date clock for deterministic "today". */
     private class FixedClock(private val date: LocalDate) : DailyClock {
         override fun todayUtc(): LocalDate = date
+
+        // DLY-6 — the seam now also exposes an instant; pin it to the date's UTC noon
+        // (this store doesn't read it, but the interface requires it).
+        override fun now(): Instant = date.atStartOfDayIn(TimeZone.UTC).plus(12.hours)
     }
 
     private val today = LocalDate(2026, 6, 21)

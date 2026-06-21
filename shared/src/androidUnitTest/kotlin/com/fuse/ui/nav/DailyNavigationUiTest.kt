@@ -20,7 +20,11 @@ import com.fuse.ui.daily.DailyScreenTags
 import com.fuse.ui.home.HomeScreen
 import com.fuse.ui.home.HomeScreenTags
 import com.fuse.ui.theme.FuseTheme
+import kotlinx.datetime.Instant
 import kotlinx.datetime.LocalDate
+import kotlinx.datetime.TimeZone
+import kotlinx.datetime.atStartOfDayIn
+import kotlin.time.Duration.Companion.hours
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
@@ -39,6 +43,7 @@ class DailyNavigationUiTest {
 
     private class FixedClock(private val date: LocalDate) : DailyClock {
         override fun todayUtc(): LocalDate = date
+        override fun now(): Instant = date.atStartOfDayIn(TimeZone.UTC).plus(12.hours)
     }
 
     private fun dailyStore() = DailyStore(

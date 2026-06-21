@@ -1,6 +1,7 @@
 package com.fuse.daily
 
 import kotlinx.datetime.Clock
+import kotlinx.datetime.Instant
 import kotlinx.datetime.LocalDate
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.todayIn
@@ -23,6 +24,14 @@ import kotlinx.datetime.todayIn
 interface DailyClock {
     /** The current calendar day in UTC. Changes at UTC midnight. */
     fun todayUtc(): LocalDate
+
+    /**
+     * DLY-6 — the current instant. Same clock seam as [todayUtc], exposed at
+     * full instant precision so the Daily reset *countdown* (time until the next
+     * UTC midnight) can recompute against a real, injectable "now". Production
+     * reads the device clock ([SystemDailyClock]); tests pin a fixed [Instant].
+     */
+    fun now(): Instant
 }
 
 /**
@@ -37,4 +46,7 @@ class SystemDailyClock(
     private val clock: Clock = Clock.System,
 ) : DailyClock {
     override fun todayUtc(): LocalDate = clock.todayIn(TimeZone.UTC)
+
+    /** DLY-6 — the current instant, read from the same underlying [clock]. */
+    override fun now(): Instant = clock.now()
 }

@@ -165,6 +165,45 @@ class HomeScreenUiTest {
         onNodeWithTag(HomeScreenTags.DAILY).assertTextEquals("Daily")
     }
 
+    // --- DLY-6: Daily reset countdown ------------------------------------------
+
+    @OptIn(ExperimentalTestApi::class)
+    @Test
+    fun dailyCountdownIsHiddenByDefault() = runComposeUiTest {
+        setContent {
+            FuseTheme {
+                HomeScreen(
+                    best = 0L,
+                    onPlayClassic = {},
+                    onOpenDaily = {},
+                    onOpenSettings = {},
+                    dailyEnabled = true,
+                    // dailyCountdown defaults to null → no caption rendered.
+                )
+            }
+        }
+        onNodeWithTag(HomeScreenTags.DAILY_COUNTDOWN).assertDoesNotExist()
+    }
+
+    @OptIn(ExperimentalTestApi::class)
+    @Test
+    fun dailyCountdownShowsTheSuppliedHhMmSsString() = runComposeUiTest {
+        // Home is presentational: it renders whatever HH:MM:SS string it's handed.
+        setContent {
+            FuseTheme {
+                HomeScreen(
+                    best = 0L,
+                    onPlayClassic = {},
+                    onOpenDaily = {},
+                    onOpenSettings = {},
+                    dailyEnabled = true,
+                    dailyCountdown = "07:03:04",
+                )
+            }
+        }
+        onNodeWithTag(HomeScreenTags.DAILY_COUNTDOWN).assertTextContains("07:03:04", substring = true)
+    }
+
     @Test
     fun formatGroupsLargeBestScores() {
         assertEquals("0", formatHomeScore(0L))
