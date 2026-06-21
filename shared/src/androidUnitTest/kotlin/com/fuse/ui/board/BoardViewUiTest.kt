@@ -1,15 +1,22 @@
 package com.fuse.ui.board
 
+import androidx.compose.foundation.layout.size
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.assertCountEquals
+import androidx.compose.ui.test.getUnclippedBoundsInRoot
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.runComposeUiTest
+import androidx.compose.ui.unit.dp
 import com.fuse.engine.Board
+import com.fuse.engine.Tile
 import com.fuse.ui.theme.FuseTheme
+import kotlin.math.abs
+import kotlin.test.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
@@ -129,5 +136,121 @@ class BoardViewUiTest {
         onAllNodesWithText("2").assertCountEquals(0)
         onNodeWithText("64").assertExists()
         onNodeWithText("128").assertExists()
+    }
+
+    // ----- FEL-1: slide animation -----------------------------------------------------
+
+    /**
+     * A fixed board side, deliberately under the Robolectric default root width (320dp)
+     * so `Modifier.size(...)` is NOT clamped and the rendered side equals this value —
+     * keeping geometry (and the expected offsets) deterministic.
+     */
+    private val boardSidePx = 300f
+
+    private fun boardWith(vararg tiles: Pair<com.fuse.engine.Position, Tile>): Board {
+        var b = Board.empty(4)
+        for ((pos, tile) in tiles) b = b.withTile(pos.row, pos.col, tile)
+        return b
+    }
+
+    /**
+     * Proves the surviving tile ANIMATES rather than teleports: with the virtual clock
+     * frozen, the tile is still near its OLD column at t=0 of the slide, and only reaches
+     * the NEW column after the slide duration has elapsed. `tile.id` (7) is unchanged, so
+     * it is the same composable sliding — not a destroy/recreate.
+     */
+    @OptIn(ExperimentalTestApi::class)
+    @Test
+    fun survivingTileSlidesFromOldToNewPosition() = runComposeUiTest {
+        val moving = Tile(value = 2, id = 7L)
+        val first = boardWith(com.fuse.engine.Position(0, 0) to moving)
+        // Same id, moved three columns to the right.
+        val second = boardWith(com.fuse.engine.Position(0, 3) to moving)
+
+        // Per-column horizontal step in layout space. Because every cell is the same
+        // width, the text node's left differs between two columns by exactly this step,
+        // independent of how the numeral is centered within its cell.
+        val geo = BoardGeometry.forBoard(4, boardSidePx)
+        val step = geo.offsetX(1) - geo.offsetX(0)
+        val fullTravel = step * 3 // col 0 -> col 3
+
+        var board by mutableStateOf(first)
+        mainClock.autoAdvance = false
+        setContent {
+            FuseTheme {
+                BoardView(board, modifier = Modifier.size(boardSidePx.dp))
+            }
+        }
+        mainClock.advanceTimeByFrame()
+
+        // Settled at the start column.
+        val atStart = onNodeWithText("2").getUnclippedBoundsInRoot().left.value
+
+        // Trigger the move; the slide begins but should NOT have jumped to the end.
+        board = second
+        mainClock.advanceTimeByFrame() // recomposition: relaunch LaunchedEffect(target)
+        mainClock.advanceTimeByFrame() // first animation frame
+        mainClock.advanceTimeBy(40L) // ~40ms into a 110ms ease-out slide
+        val midX = onNodeWithText("2").getUnclippedBoundsInRoot().left.value
+        val midProgress = midX - atStart
+        assertTrue(
+            midProgress in 1f..(fullTravel - 10f),
+            "Mid-slide the tile should be PARTWAY (1..${fullTravel - 10f}px from start), " +
+                "was $midProgress (0 => didn't move at all; $fullTravel => teleported)",
+        )
+
+        // After the full slide it settles exactly three columns to the right.
+        mainClock.advanceTimeBy(400L)
+        val atEnd = onNodeWithText("2").getUnclippedBoundsInRoot().left.value
+        assertTrue(
+            abs((atEnd - atStart) - fullTravel) < 8f,
+            "Tile should settle 3 cols right (~${fullTravel}px), moved ${atEnd - atStart}",
+        )
+    }
+
+    /**
+     * Proves NO SPAWN FLICKER: a brand-new tile (new id, present only in the second board,
+     * as a spawn/merge result would be) renders AT its target column from its very first
+     * frame — it does not first appear at the origin (col 0 / 0,0) and slide in.
+     */
+    @OptIn(ExperimentalTestApi::class)
+    @Test
+    fun newTileAppearsAtTargetWithoutSlidingFromOrigin() = runComposeUiTest {
+        // Reference tile "4" stays at col 0 the whole time — anchors col-0 text-left.
+        val reference = Tile(value = 4, id = 1L)
+        val first = boardWith(com.fuse.engine.Position(0, 0) to reference)
+        // A new tile (new id) appears at col 3 — like a post-move spawn.
+        val spawned = Tile(value = 2, id = 99L)
+        val second = boardWith(
+            com.fuse.engine.Position(0, 0) to reference,
+            com.fuse.engine.Position(0, 3) to spawned,
+        )
+
+        val geo = BoardGeometry.forBoard(4, boardSidePx)
+        val expectedTravel = geo.offsetX(3) - geo.offsetX(0) // col 0 -> col 3
+
+        var board by mutableStateOf(first)
+        mainClock.autoAdvance = false
+        setContent {
+            FuseTheme {
+                BoardView(board, modifier = Modifier.size(boardSidePx.dp))
+            }
+        }
+        mainClock.advanceTimeByFrame()
+
+        // Col-0 text-left, from the stationary reference tile.
+        val col0Left = onNodeWithText("4").getUnclippedBoundsInRoot().left.value
+
+        // Introduce the spawned tile; check its VERY FIRST rendered frame.
+        board = second
+        mainClock.advanceTimeByFrame()
+        val firstFrameLeft = onNodeWithText("2").getUnclippedBoundsInRoot().left.value
+        val firstFrameTravel = firstFrameLeft - col0Left
+        assertTrue(
+            abs(firstFrameTravel - expectedTravel) < 8f,
+            "Spawned tile must appear AT col 3 (~${expectedTravel}px right of col 0) from " +
+                "its first frame — no flicker. Was ${firstFrameTravel}px " +
+                "(~0 would mean it flashed at the origin first).",
+        )
     }
 }
