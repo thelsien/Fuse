@@ -10,9 +10,11 @@ import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
+import com.fuse.daily.DailyClock
 import com.fuse.feedback.ColorblindSettings
 import com.fuse.feedback.ReducedMotionSettings
 import com.fuse.presentation.DailyStreakStore
+import com.fuse.ui.home.rememberDailyCountdown
 import com.fuse.presentation.GameIntent
 import com.fuse.presentation.GameStore
 import com.fuse.ui.daily.DailyScreen
@@ -96,6 +98,7 @@ fun App() {
 private fun AppShell(
     store: GameStore = koinInject(),
     dailyStreakStore: DailyStreakStore = koinInject(),
+    dailyClock: DailyClock = koinInject(),
     navController: NavHostController = rememberNavController(),
 ) {
     val state by store.state.collectAsState()
@@ -103,6 +106,10 @@ private fun AppShell(
     // Daily (DailyScreen records it) updates this flow, so popping back to Home shows the
     // up-to-date streak with no manual refresh.
     val dailyStreak by dailyStreakStore.state.collectAsState()
+    // DLY-6 — the live "HH:MM:SS" until the next Daily reset (next UTC midnight). Sourced from
+    // the same injectable clock seam (DailyClock.now), it ticks once per second and is scoped to
+    // composition (cancels when Home leaves). Surfaced as a caption on Home's Daily entry.
+    val dailyCountdown by rememberDailyCountdown(dailyClock)
 
     NavHost(
         navController = navController,
@@ -137,6 +144,8 @@ private fun AppShell(
                 dailyEnabled = true,
                 // DLY-5 — surface the live daily streak on the Daily entry ("Daily · 🔥 X").
                 dailyStreak = dailyStreak.current,
+                // DLY-6 — the live countdown to the next Daily (ticks each second; UTC midnight).
+                dailyCountdown = dailyCountdown,
                 onOpenDaily = { navController.navigate(FuseDestinations.DAILY) },
                 onOpenSettings = { navController.navigate(FuseDestinations.SETTINGS) },
                 modifier = Modifier.fillMaxSize(),

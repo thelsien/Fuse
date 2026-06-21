@@ -72,6 +72,10 @@ import com.fuse.ui.theme.FuseTheme
  * @param dailyEnabled whether the Daily entry point is active; defaults to `false` (placeholder).
  * @param dailyStreak DLY-5 — the LIVE current daily streak (0 when none/broken). When the Daily
  *   entry is enabled and this is > 0, the button surfaces it ("Daily · 🔥 X"). Defaults to `0`.
+ * @param dailyCountdown DLY-6 — the LIVE "HH:MM:SS" until the next Daily reset (the next UTC
+ *   midnight), produced by a 1s tick in the stateful wrapper. When the Daily entry is enabled and
+ *   this is non-null, a small "Resets in HH:MM:SS" caption is shown beneath the Daily button. Pure
+ *   presentation: Home renders whatever string it is handed. Defaults to `null` (no countdown).
  * @param canResume SHL-4 — `true` iff a resumable in-progress game exists. When `true`, Home shows
  *   **Continue** + **New game** instead of the single **Play Classic** CTA. Defaults to `false`.
  * @param savedScore SHL-4 — the saved game's current score, shown on the **Continue** button for
@@ -90,6 +94,7 @@ fun HomeScreen(
     modifier: Modifier = Modifier,
     dailyEnabled: Boolean = false,
     dailyStreak: Int = 0,
+    dailyCountdown: String? = null,
     canResume: Boolean = false,
     savedScore: Long = 0L,
     onContinue: () -> Unit = onPlayClassic,
@@ -178,6 +183,19 @@ fun HomeScreen(
                     enabled = dailyEnabled,
                     tag = HomeScreenTags.DAILY,
                 )
+                // DLY-6 — live countdown to the next Daily reset (next UTC midnight). A small,
+                // unobtrusive caption beneath the Daily entry; the stateful wrapper ticks it once
+                // per second. Only shown when Daily is live and a countdown string is supplied.
+                if (dailyEnabled && dailyCountdown != null) {
+                    Text(
+                        text = "Resets in $dailyCountdown",
+                        style = FuseTheme.type.caption.copy(color = c.sub),
+                        textAlign = TextAlign.Center,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .testTag(HomeScreenTags.DAILY_COUNTDOWN),
+                    )
+                }
                 OutlineButton(
                     label = "Settings",
                     onClick = onOpenSettings,
@@ -322,5 +340,8 @@ object HomeScreenTags {
     /** SHL-4 — "New game" action shown alongside Continue (starts fresh, discards the save). */
     const val NEW_GAME: String = "home_new_game"
     const val DAILY: String = "home_daily"
+
+    /** DLY-6 — the live "Resets in HH:MM:SS" countdown caption beneath the Daily entry. */
+    const val DAILY_COUNTDOWN: String = "home_daily_countdown"
     const val SETTINGS: String = "home_settings"
 }

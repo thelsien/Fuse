@@ -69,6 +69,7 @@ class DailyClockTest {
         val fixed = LocalDate(2026, 1, 1)
         val fake = object : DailyClock {
             override fun todayUtc(): LocalDate = fixed
+            override fun now(): Instant = Instant.parse("2026-01-01T00:00:00Z")
         }
         assertEquals(fixed, fake.todayUtc())
         assertEquals(2620070580895364124L, dateToSeed(fake.todayUtc()))

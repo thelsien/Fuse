@@ -12,7 +12,11 @@ import com.russhwolf.settings.Settings
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.yield
+import kotlinx.datetime.Instant
 import kotlinx.datetime.LocalDate
+import kotlinx.datetime.TimeZone
+import kotlinx.datetime.atStartOfDayIn
+import kotlin.time.Duration.Companion.hours
 import kotlin.test.Test
 import kotlin.test.assertEquals
 
@@ -30,6 +34,9 @@ class DailyStreakStoreTest {
 
     private class FixedClock(private val date: LocalDate) : DailyClock {
         override fun todayUtc(): LocalDate = date
+
+        // DLY-6 — instant seam (unused by the streak store; pinned to the date's UTC noon).
+        override fun now(): Instant = date.atStartOfDayIn(TimeZone.UTC).plus(12.hours)
     }
 
     // Three consecutive UTC days (well past the DAILY_EPOCH).

@@ -17,7 +17,11 @@ import com.fuse.presentation.DailyStreakStore
 import com.fuse.presentation.DailyUiState
 import com.fuse.ui.theme.FuseTheme
 import com.fuse.daily.DailyClock
+import kotlinx.datetime.Instant
 import kotlinx.datetime.LocalDate
+import kotlinx.datetime.TimeZone
+import kotlinx.datetime.atStartOfDayIn
+import kotlin.time.Duration.Companion.hours
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
@@ -39,6 +43,7 @@ class DailyScreenUiTest {
 
     private class FixedClock(private val date: LocalDate) : DailyClock {
         override fun todayUtc(): LocalDate = date
+        override fun now(): Instant = date.atStartOfDayIn(TimeZone.UTC).plus(12.hours)
     }
 
     /** Two 16s on the top-left → swipe LEFT merges to 32 (target 32, par 1). */
