@@ -57,6 +57,9 @@ import org.koin.compose.koinInject
  *
  * @param store the MVI store; defaults to the Koin-provided singleton.
  * @param modifier outer modifier.
+ * @param onBack SHL-1 — back affordance to the Home screen. A no-op by default so existing
+ *   call sites/tests are unchanged; `App()` passes a callback that returns to Home. The button
+ *   only renders when a real handler is supplied. SHL-2 replaces this with nav back handling.
  */
 @Composable
 fun GameScreen(
@@ -64,6 +67,7 @@ fun GameScreen(
     store: GameStore = koinInject(),
     haptics: HapticsCoordinator = koinInject(),
     sound: SoundCoordinator = koinInject(),
+    onBack: (() -> Unit)? = null,
 ) {
     val state by store.state.collectAsState()
 
@@ -153,6 +157,7 @@ fun GameScreen(
             showWin = false
             store.accept(GameIntent.NewGame())
         },
+        onBack = onBack,
         modifier = modifier,
     )
 }
@@ -174,6 +179,7 @@ fun GameScreenContent(
     showWin: Boolean = false,
     onKeepGoing: () -> Unit = {},
     onRestart: () -> Unit = onNewGame,
+    onBack: (() -> Unit)? = null,
 ) {
     Box(
         modifier = modifier
@@ -187,6 +193,19 @@ fun GameScreenContent(
                 .padding(16.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
+            // SHL-1 — back affordance to Home (only when a handler is supplied by App()).
+            // TEMPORARY: SHL-2 replaces this with proper nav back. Left-aligned, above the HUD.
+            if (onBack != null) {
+                androidx.compose.material3.TextButton(
+                    onClick = onBack,
+                    modifier = Modifier
+                        .align(Alignment.Start)
+                        .testTag(GameScreenTags.BACK),
+                ) {
+                    Text("‹ Home")
+                }
+            }
+
             // UIB-4 — the score HUD (live current + session best), fed from store state.
             ScoreHud(
                 current = state.currentScore,
@@ -283,6 +302,9 @@ object GameScreenTags {
     const val ROOT: String = "game_screen"
     const val BOARD: String = "game_board"
     const val NEW_GAME: String = "game_new_game"
+
+    /** SHL-1 — the back-to-Home affordance (rendered only when `onBack` is supplied). */
+    const val BACK: String = "game_back"
 }
 
 /** Semantic marker placed on the board when the last swipe was blocked. */
