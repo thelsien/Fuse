@@ -15,6 +15,9 @@ import com.fuse.engine.Score
 import com.fuse.feedback.HapticsCoordinator
 import com.fuse.feedback.HapticsSettings
 import com.fuse.feedback.NoOpHaptics
+import com.fuse.feedback.NoOpSound
+import com.fuse.feedback.SoundCoordinator
+import com.fuse.feedback.SoundSettings
 import com.fuse.presentation.GameStore
 import com.fuse.ui.theme.FuseTheme
 import org.junit.Test
@@ -36,6 +39,10 @@ class GameScreenUiTest {
     /** FEL-4 — a Koin-free coordinator so the UI tests still need no Koin (NoOp haptics). */
     private fun testHaptics(): HapticsCoordinator =
         HapticsCoordinator(NoOpHaptics, HapticsSettings())
+
+    /** FEL-5 — a Koin-free sound coordinator (NoOp sound) so the UI tests need no Koin. */
+    private fun testSound(): SoundCoordinator =
+        SoundCoordinator(NoOpSound, SoundSettings())
 
     private fun stateFromBoard(board: Board): GameState = GameState(
         board = board,
@@ -64,7 +71,7 @@ class GameScreenUiTest {
         )
 
         setContent {
-            FuseTheme { GameScreen(store = store, haptics = testHaptics()) }
+            FuseTheme { GameScreen(store = store, haptics = testHaptics(), sound = testSound()) }
         }
 
         // Before: two 2-tiles, score 0.
@@ -96,7 +103,7 @@ class GameScreenUiTest {
         )
 
         setContent {
-            FuseTheme { GameScreen(store = store, haptics = testHaptics()) }
+            FuseTheme { GameScreen(store = store, haptics = testHaptics(), sound = testSound()) }
         }
 
         onNodeWithTag(ScoreHudTags.SCORE_VALUE).assertTextEquals("0")
@@ -126,7 +133,7 @@ class GameScreenUiTest {
             ),
         )
         setContent {
-            FuseTheme { GameScreen(store = store, haptics = testHaptics()) }
+            FuseTheme { GameScreen(store = store, haptics = testHaptics(), sound = testSound()) }
         }
 
         onNodeWithTag(GameScreenTags.BOARD).performTouchInput { swipeLeft() }

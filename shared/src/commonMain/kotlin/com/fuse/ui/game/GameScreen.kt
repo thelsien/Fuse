@@ -23,6 +23,7 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import com.fuse.feedback.HapticsCoordinator
+import com.fuse.feedback.SoundCoordinator
 import com.fuse.presentation.GameEffect
 import com.fuse.presentation.GameIntent
 import com.fuse.presentation.GameStore
@@ -58,19 +59,27 @@ fun GameScreen(
     modifier: Modifier = Modifier,
     store: GameStore = koinInject(),
     haptics: HapticsCoordinator = koinInject(),
+    sound: SoundCoordinator = koinInject(),
 ) {
     val state by store.state.collectAsState()
 
-    // FEL-4 — haptic feedback. A thin collector turns the store's one-shot effects into
-    // the pure decision: an accepted Moved → tick (merge) / thunk (milestone) and a
-    // Blocked → buzz, each gated by the haptics toggle inside [HapticsCoordinator]. Driven
-    // off the non-replaying `effects` flow so each cue fires exactly once per move and is
-    // never re-triggered by recomposition. (Real haptic feel only on a physical device;
-    // emulators/simulators run this harmlessly with no vibration.)
-    LaunchedEffect(store, haptics) {
+    // FEL-4/FEL-5 — feedback. A thin collector turns the store's one-shot effects into the
+    // pure decisions for BOTH channels off the same [GameEffect.Moved] signal:
+    //  - haptics: accepted Moved → tick (merge) / thunk (milestone); Blocked → buzz.
+    //  - sound: accepted Moved → a climbing merge tone (pitch rises with the highest merged
+    //    tile) plus a milestone/win sting; a Blocked move plays NO sound (an error sound on
+    //    every failed swipe would grate — the haptic buzz already marks it).
+    // Each channel is gated by its own toggle inside its coordinator. Driven off the
+    // non-replaying `effects` flow so each cue fires exactly once per move and is never
+    // re-triggered by recomposition. (Real audio/haptics only on a physical device;
+    // emulators/simulators run this harmlessly — no crash, often no audible output.)
+    LaunchedEffect(store, haptics, sound) {
         store.effects.collect { effect ->
             when (effect) {
-                is GameEffect.Moved -> haptics.onMove(effect.mergedValues, effect.justWon)
+                is GameEffect.Moved -> {
+                    haptics.onMove(effect.mergedValues, effect.justWon)
+                    sound.onMove(effect.mergedValues, effect.justWon)
+                }
                 GameEffect.Blocked -> haptics.onBlocked()
                 GameEffect.Won -> Unit
             }

@@ -15,6 +15,9 @@ import com.fuse.engine.Score
 import com.fuse.feedback.HapticsCoordinator
 import com.fuse.feedback.HapticsSettings
 import com.fuse.feedback.NoOpHaptics
+import com.fuse.feedback.NoOpSound
+import com.fuse.feedback.SoundCoordinator
+import com.fuse.feedback.SoundSettings
 import com.fuse.presentation.GameStore
 import com.fuse.ui.theme.FuseTheme
 import org.junit.Assert.assertTrue
@@ -44,6 +47,10 @@ class GameOverlaysUiTest {
     /** FEL-4 — a Koin-free coordinator so these UI tests still need no Koin. */
     private fun testHaptics(): HapticsCoordinator =
         HapticsCoordinator(NoOpHaptics, HapticsSettings())
+
+    /** FEL-5 — a Koin-free sound coordinator (NoOp sound) so these UI tests need no Koin. */
+    private fun testSound(): SoundCoordinator =
+        SoundCoordinator(NoOpSound, SoundSettings())
 
     private fun stateFromBoard(
         board: Board,
@@ -90,7 +97,7 @@ class GameOverlaysUiTest {
                 score = Score(current = 1234L, best = 1234L),
             ),
         )
-        setContent { FuseTheme { GameScreen(store = store, haptics = testHaptics()) } }
+        setContent { FuseTheme { GameScreen(store = store, haptics = testHaptics(), sound = testSound()) } }
 
         // Lose overlay is up with the final score; best preserved.
         onNodeWithTag(GameOverlayTags.LOSE_ROOT).assertExists()
@@ -112,7 +119,7 @@ class GameOverlaysUiTest {
     @Test
     fun winOverlayShowsOnceAndKeepGoingContinuesPlay() = runComposeUiTest {
         val store = GameStore.forState(stateFromBoard(nearWinBoard()))
-        setContent { FuseTheme { GameScreen(store = store, haptics = testHaptics()) } }
+        setContent { FuseTheme { GameScreen(store = store, haptics = testHaptics(), sound = testSound()) } }
 
         // Not won yet.
         onNodeWithTag(GameOverlayTags.WIN_ROOT).assertDoesNotExist()
@@ -150,7 +157,7 @@ class GameOverlaysUiTest {
     @Test
     fun winOverlayRestartStartsNewGame() = runComposeUiTest {
         val store = GameStore.forState(stateFromBoard(nearWinBoard()))
-        setContent { FuseTheme { GameScreen(store = store, haptics = testHaptics()) } }
+        setContent { FuseTheme { GameScreen(store = store, haptics = testHaptics(), sound = testSound()) } }
 
         onNodeWithTag(GameScreenTags.BOARD).performTouchInput { swipeLeft() }
         waitForIdle()
