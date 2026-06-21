@@ -8,7 +8,10 @@ import com.fuse.data.platformSettingsModule
 import com.fuse.domain.GetGreetingUseCase
 import com.fuse.feedback.HapticsCoordinator
 import com.fuse.feedback.HapticsSettings
+import com.fuse.feedback.SoundCoordinator
+import com.fuse.feedback.SoundSettings
 import com.fuse.feedback.platformHapticsModule
+import com.fuse.feedback.platformSoundModule
 import com.fuse.presentation.GameStore
 import com.fuse.presentation.SamplePresenter
 import org.koin.core.module.Module
@@ -62,6 +65,13 @@ val presentationModule: Module = module {
 val feedbackModule: Module = module {
     single { HapticsSettings() }
     factory { HapticsCoordinator(haptics = get(), settings = get()) }
+    // FEL-5 — sound effects wiring. A SEPARATE mute toggle ([SoundSettings], default-on; a
+    // player may mute sound while keeping haptics) and the pure [SoundCoordinator] mapping
+    // move outcomes to [com.fuse.feedback.Sound] calls (climbing merge tone + milestone/win
+    // stings). The platform [com.fuse.feedback.Sound] is bound by [platformSoundModule]
+    // (AudioTrack synth on Android, AVAudioEngine synth on iOS), which must precede this.
+    single { SoundSettings() }
+    factory { SoundCoordinator(sound = get(), settings = get()) }
 }
 
 /** UI layer — composable-scoped providers (FND-4 design tokens etc.). Empty. */
@@ -77,6 +87,7 @@ val appModules: List<Module> = listOf(
     engineModule,
     platformSettingsModule,
     platformHapticsModule,
+    platformSoundModule,
     dataModule,
     domainModule,
     presentationModule,
