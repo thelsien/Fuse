@@ -5,6 +5,8 @@ import com.fuse.data.GameRepository
 import com.fuse.data.Greeting
 import com.fuse.data.SettingsGameRepository
 import com.fuse.data.platformSettingsModule
+import com.fuse.daily.DailyClock
+import com.fuse.daily.SystemDailyClock
 import com.fuse.domain.GetGreetingUseCase
 import com.fuse.feedback.ColorblindSettings
 import com.fuse.feedback.FeedbackPreferences
@@ -33,6 +35,18 @@ import org.koin.dsl.module
 
 /** Engine layer — pure game logic (Sprint 1 ENG-*). No bindings yet. */
 val engineModule: Module = module {
+}
+
+/**
+ * Daily Challenge layer (DLY-1) — the date->seed foundation.
+ *
+ * Binds the [DailyClock] seam (the only impure part of the daily) to its
+ * device-backed [SystemDailyClock]. DLY-3 (generator) and DLY-4 (mode) resolve
+ * this to learn TODAY's UTC calendar day, then feed it into the pure
+ * `dateToSeed` / `dailyDayNumber` functions. `single` — stateless, one is enough.
+ */
+val dailyModule: Module = module {
+    single<DailyClock> { SystemDailyClock() }
 }
 
 /** Data layer — repositories / local sources. Provides the sample [Greeting]. */
@@ -120,6 +134,7 @@ val uiModule: Module = module {
  * which resolves `Settings` for the [com.fuse.data.GameRepository]. */
 val appModules: List<Module> = listOf(
     engineModule,
+    dailyModule,
     platformSettingsModule,
     platformHapticsModule,
     platformSoundModule,
