@@ -61,6 +61,55 @@ class GameStoreTest {
     }
 
     @Test
+    fun acceptedMoveProjectsSpawnedTileOntoState() {
+        // FEL-3 — an accepted move always spawns one tile; the store must surface it (id +
+        // position) so the renderer can target the spawn entrance. The spawned tile is the
+        // ONE tile on the new board that is not the merge result.
+        val store = GameStore.forState(twoTwoRowState())
+        store.accept(GameIntent.Move(Direction.LEFT))
+        val after = store.state.value
+
+        val spawned = after.spawned
+        val pos = after.spawnPosition
+        assertTrue(spawned != null, "an accepted move carries the spawned tile")
+        assertTrue(pos != null, "an accepted move carries the spawn position")
+        // It is genuinely on the board and is not the merge result (the merged 4 has a
+        // distinct id surfaced in lastMerges).
+        assertTrue(after.board.tiles().any { it.id == spawned!!.id }, "spawn is on the board")
+        val mergeResultIds = after.lastMerges.map { it.resultId }.toSet()
+        assertFalse(spawned!!.id in mergeResultIds, "the spawn id is never a merge result id")
+    }
+
+    @Test
+    fun blockedMoveCarriesNoSpawn() {
+        // First produce a spawn, then a blocked move must clear it (no stale entrance).
+        val store = GameStore.forState(twoTwoRowState())
+        store.accept(GameIntent.Move(Direction.LEFT))
+        assertTrue(store.state.value.spawned != null, "precondition: a spawn occurred")
+
+        // UP on the now single-row-ish board: force a blocked no-op.
+        val blocked = GameStore.forState(blockedLeftState())
+        blocked.accept(GameIntent.Move(Direction.LEFT))
+        val after = blocked.state.value
+        assertTrue(after.lastMoveBlocked, "precondition: the move was blocked")
+        assertEquals(null, after.spawned, "a blocked move spawns nothing")
+        assertEquals(null, after.spawnPosition, "a blocked move has no spawn position")
+    }
+
+    @Test
+    fun newGameAndInitialStateCarryNoSpawn() {
+        // FEL-3 — the initial board and a fresh game are a whole-board appearance, not a
+        // single post-move spawn, so no per-tile entrance should be targeted.
+        val store = GameStore(initialSeed = 42L)
+        assertEquals(null, store.state.value.spawned, "initial state has no spawn")
+        assertEquals(null, store.state.value.spawnPosition)
+
+        store.accept(GameIntent.NewGame(seed = 7L))
+        assertEquals(null, store.state.value.spawned, "new game has no spawn")
+        assertEquals(null, store.state.value.spawnPosition)
+    }
+
+    @Test
     fun blockedMoveIsNoOpAndSetsBlockedFlag() {
         // A row [2,4,8,16] flush-left: LEFT is a no-op (nothing slides or merges).
         val store = GameStore.forState(blockedLeftState())

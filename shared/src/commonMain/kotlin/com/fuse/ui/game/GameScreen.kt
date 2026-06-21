@@ -123,9 +123,13 @@ fun GameScreenContent(
 
             BoardView(
                 board = state.board,
-                // FEL-2 — pop/glow the just-merged result tiles from the last accepted move.
-                // Empty on blocked moves / new game ⇒ BoardTransition.None ⇒ no pop.
-                transition = BoardTransition.fromMerges(state.lastMerges),
+                // FEL-2 — pop/glow the just-merged result tiles, and FEL-3 — play the
+                // entrance for the tile that spawned this move (after the slide settles).
+                // Empty merges + null spawn (blocked / new game) ⇒ BoardTransition.None.
+                transition = BoardTransition.fromOutcome(
+                    merges = state.lastMerges,
+                    spawnedId = state.spawned?.id,
+                ),
                 modifier = Modifier
                     .fillMaxWidth()
                     .testTag(GameScreenTags.BOARD)

@@ -278,4 +278,89 @@ class BoardViewUiTest {
         }
         onNodeWithText("64").assertExists()
     }
+
+    // ----- FEL-3: spawn entrance ------------------------------------------------------
+
+    /**
+     * Proves the spawned tile appears IN PLACE at its target cell — it does not first flash
+     * at the origin and slide in (the entrance is a scale+fade, not a slide). With the clock
+     * frozen, the spawn's text-left at its very first frame already equals its target column,
+     * so when the deferred entrance later runs, it grows in place rather than travelling.
+     *
+     * The entrance itself is a `graphicsLayer` scale+alpha, which is DRAW-only and does not
+     * change layout bounds, so the "deferred until after the slide" timing is asserted purely
+     * and deterministically in [com.fuse.ui.board.MergePopTest] via [spawnEntranceProgress]
+     * (zero during the slide, ramps after). This test covers the render/positioning path.
+     */
+    @OptIn(ExperimentalTestApi::class)
+    @Test
+    fun spawnedTileAppearsInPlaceAtItsTargetCell() = runComposeUiTest {
+        // Reference "4" stays at col 0 — anchors col-0 text-left.
+        val reference = Tile(value = 4, id = 1L)
+        val first = boardWith(com.fuse.engine.Position(0, 0) to reference)
+        // A new tile (new id) appears at col 2 — the move's spawn.
+        val spawned = Tile(value = 2, id = 99L)
+        val second = boardWith(
+            com.fuse.engine.Position(0, 0) to reference,
+            com.fuse.engine.Position(0, 2) to spawned,
+        )
+
+        val geo = BoardGeometry.forBoard(4, boardSidePx)
+        val expectedTravel = geo.offsetX(2) - geo.offsetX(0) // col 0 -> col 2
+
+        var board by mutableStateOf(first)
+        var transition by mutableStateOf<BoardTransition?>(null)
+        mainClock.autoAdvance = false
+        setContent {
+            FuseTheme {
+                BoardView(board, transition = transition, modifier = Modifier.size(boardSidePx.dp))
+            }
+        }
+        mainClock.advanceTimeByFrame()
+
+        val col0Left = onNodeWithText("4").getUnclippedBoundsInRoot().left.value
+
+        // Introduce the spawn, marking id 99 as the spawned tile (FEL-3 entrance branch).
+        board = second
+        transition = BoardTransition.fromOutcome(merges = emptyList(), spawnedId = 99L)
+        mainClock.advanceTimeByFrame()
+        val firstFrameLeft = onNodeWithText("2").getUnclippedBoundsInRoot().left.value
+        val firstFrameTravel = firstFrameLeft - col0Left
+        assertTrue(
+            abs(firstFrameTravel - expectedTravel) < 8f,
+            "Spawned tile must appear AT col 2 (~${expectedTravel}px right of col 0) from its " +
+                "first frame — it grows in place, never slides in. Was ${firstFrameTravel}px.",
+        )
+
+        // Let the deferred entrance fully play out; the tile stays at its target column.
+        mainClock.advanceTimeBy(600L)
+        val settledLeft = onNodeWithText("2").getUnclippedBoundsInRoot().left.value
+        assertTrue(
+            abs((settledLeft - col0Left) - expectedTravel) < 8f,
+            "After the entrance the spawn remains at col 2 (no travel): " +
+                "was ${settledLeft - col0Left}px vs ${expectedTravel}px",
+        )
+    }
+
+    /**
+     * A spawn entrance composes/renders cleanly via the public [BoardTransition.fromOutcome]
+     * path and the spawned numeral exists. Smoke coverage of the spawn branch independent of
+     * the positioning assertions above.
+     */
+    @OptIn(ExperimentalTestApi::class)
+    @Test
+    fun spawnTransitionComposesAndRendersValue() = runComposeUiTest {
+        val tile = Tile(value = 2, id = 99L)
+        val board = boardWith(com.fuse.engine.Position(1, 1) to tile)
+        setContent {
+            FuseTheme {
+                BoardView(
+                    board = board,
+                    transition = BoardTransition.fromOutcome(emptyList(), spawnedId = 99L),
+                    modifier = Modifier.size(boardSidePx.dp),
+                )
+            }
+        }
+        onNodeWithText("2").assertExists()
+    }
 }
