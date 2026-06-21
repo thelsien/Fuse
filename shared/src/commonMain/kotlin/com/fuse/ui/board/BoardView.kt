@@ -4,6 +4,7 @@ import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.VectorConverter
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.aspectRatio
@@ -18,6 +19,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
@@ -29,6 +32,7 @@ import com.fuse.engine.Tile
 import com.fuse.ui.theme.FuseMotion
 import com.fuse.ui.theme.FuseTheme
 import com.fuse.ui.theme.TileRamp
+import kotlinx.coroutines.launch
 
 /**
  * UIB-1 — the Board renderer.
@@ -73,19 +77,25 @@ import com.fuse.ui.theme.TileRamp
  *
  * The position->offset math lives in [BoardGeometry] (pure, unit-tested in commonTest).
  *
- * ## What FEL-1 deliberately does NOT do (FEL-2 / FEL-3)
- * This is design (a) — a position-diff renderer driven only by the new [Board]. Surviving
- * tiles slide; spawned and merged-result tiles appear cleanly in place. The two MERGING
- * SOURCE tiles are not slid INTO the result (they vanish from the new board and the result
- * appears at its target) — sliding the sources together is the merge polish handled by
- * FEL-2, and the merged-result/spawn entrance POP is FEL-3. Hook for those: add an optional
- * `transition: BoardTransition?` param fed by `GameScreen` from the store's `lastMerges` /
- * spawn data; the per-id animatable map below is already the right home for it.
+ * ## Merge pop (FEL-2)
+ * When supplied a [transition] (built by `GameScreen` from the store's `lastMerges`), each
+ * tile whose id is a merge RESULT plays a one-shot scale-bounce + transient glow as it
+ * appears. The pop's peak scale and the glow's alpha both scale with the resulting value's
+ * TIER via [mergeIntensity] — a 1024 reads bigger than a 4. Pop/glow durations + easing come
+ * from [FuseTheme.motion] (`mergePopMs` / `mergeGlowMs` / `mergePopEasing`), so FEL-8's
+ * reduced-motion branch collapses them to an effective snap. `transition == null` (or
+ * [BoardTransition.None]) ⇒ no pop, identical to FEL-1 behavior, so plain `BoardView(board)`
+ * callers are unchanged.
+ *
+ * ## What this deliberately does NOT do (FEL-3)
+ * The two MERGING SOURCE tiles are not slid INTO the result (they vanish from the new board
+ * and the result pops in place). The spawned-tile entrance pop is FEL-3.
  */
 @Composable
 fun BoardView(
     board: Board,
     modifier: Modifier = Modifier,
+    transition: BoardTransition? = null,
 ) {
     val colors = FuseTheme.colors
     val motion = FuseTheme.motion
@@ -116,6 +126,10 @@ fun BoardView(
         // Occupied tiles, each keyed by its id so its slide animatable survives
         // recomposition (a surviving tile slides; a new-id tile appears in place).
         for ((position, tile) in board.tilesWithPositions()) {
+            // Non-null only when this tile is a merge RESULT on this transition — drives
+            // the one-shot pop/glow. Null for slid/spawned tiles (no pop).
+            val popIntensity: Float? =
+                if (transition?.isMergeResult(tile.id) == true) mergeIntensity(tile.value) else null
             key(tile.id) {
                 TileCell(
                     tile = tile,
@@ -123,6 +137,7 @@ fun BoardView(
                     targetY = geometry.offsetY(position.row).dp,
                     size = cell,
                     motion = motion,
+                    popIntensity = popIntensity,
                 )
             }
         }
@@ -137,6 +152,7 @@ private fun TileCell(
     size: Dp,
     motion: FuseMotion,
     modifier: Modifier = Modifier,
+    popIntensity: Float? = null,
 ) {
     // One Offset animatable per tile id. This whole composable sits inside key(tile.id),
     // so the remember SURVIVES recomposition for a surviving tile (same id, new target ->
@@ -155,13 +171,45 @@ private fun TileCell(
         )
     }
 
+    // FEL-2 — merge pop. A merge-result tile (popIntensity != null) is freshly composed
+    // (new id), so this one-shot LaunchedEffect runs exactly once as it appears: scale
+    // grows to an intensity-scaled peak then settles to 1, with a glow that fades from an
+    // intensity-scaled alpha. Plain/surviving tiles keep scale 1 / glow 0 — no effect.
+    val pop = remember { Animatable(1f) }
+    val glow = remember { Animatable(0f) }
+    if (popIntensity != null) {
+        LaunchedEffect(Unit) {
+            val peak = mergePopPeakScale(popIntensity)
+            val glowPeak = mergeGlowPeakAlpha(popIntensity)
+            launch {
+                glow.snapTo(glowPeak)
+                glow.animateTo(0f, tween(motion.mergeGlowMs, easing = motion.standardEasing))
+            }
+            pop.snapTo(1f)
+            pop.animateTo(peak, tween(motion.mergePopMs / 2, easing = motion.standardEasing))
+            pop.animateTo(1f, tween(motion.mergePopMs / 2, easing = motion.mergePopEasing))
+        }
+    }
+
     val tileColors = TileRamp.forValue(tile.value)
     Box(
         modifier = modifier
             .offset(x = anim.value.x.dp, y = anim.value.y.dp)
+            .graphicsLayer {
+                scaleX = pop.value
+                scaleY = pop.value
+            }
             .size(size)
             .clip(FuseTheme.shapes.tile)
-            .background(tileColors.bg),
+            .background(tileColors.bg)
+            .then(
+                // Transient glow ring, fixed width so it doesn't shift layout; alpha fades.
+                if (glow.value > 0f) {
+                    Modifier.border(2.dp, Color.White.copy(alpha = glow.value), FuseTheme.shapes.tile)
+                } else {
+                    Modifier
+                },
+            ),
         contentAlignment = Alignment.Center,
     ) {
         val text = tile.value.toString()

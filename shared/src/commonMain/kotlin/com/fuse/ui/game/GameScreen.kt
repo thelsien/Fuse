@@ -26,6 +26,7 @@ import com.fuse.presentation.GameEffect
 import com.fuse.presentation.GameIntent
 import com.fuse.presentation.GameStore
 import com.fuse.presentation.GameUiState
+import com.fuse.ui.board.BoardTransition
 import com.fuse.ui.board.BoardView
 import com.fuse.ui.input.swipeable
 import kotlinx.coroutines.flow.filterIsInstance
@@ -122,6 +123,9 @@ fun GameScreenContent(
 
             BoardView(
                 board = state.board,
+                // FEL-2 — pop/glow the just-merged result tiles from the last accepted move.
+                // Empty on blocked moves / new game ⇒ BoardTransition.None ⇒ no pop.
+                transition = BoardTransition.fromMerges(state.lastMerges),
                 modifier = Modifier
                     .fillMaxWidth()
                     .testTag(GameScreenTags.BOARD)
