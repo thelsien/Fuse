@@ -1,2 +1,12 @@
 <?xml version="1.0" encoding="utf-8"?>
-<manifest />
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <!--
+      FEL-4 — the shared library owns the Vibrator-backed Haptics, so it declares the
+      VIBRATE permission here. The library manifest merges into every consuming app
+      (the :androidApp), so haptics work without each app re-declaring it. VIBRATE is a
+      normal (install-time) permission — no runtime request needed.
+    -->
+    <uses-permission android:name="android.permission.VIBRATE" />
+
+</manifest>
