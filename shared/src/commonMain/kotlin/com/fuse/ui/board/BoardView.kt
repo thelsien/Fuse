@@ -1,5 +1,8 @@
 package com.fuse.ui.board
 
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.VectorConverter
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -8,18 +11,22 @@ import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.key
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.material3.Text
 import com.fuse.engine.Board
 import com.fuse.engine.Tile
-import com.fuse.ui.theme.Dimens
+import com.fuse.ui.theme.FuseMotion
 import com.fuse.ui.theme.FuseTheme
 import com.fuse.ui.theme.TileRamp
 
@@ -51,11 +58,29 @@ import com.fuse.ui.theme.TileRamp
  * is drawn in `.fg`, with corner radius from the shape tokens. The numeral is scaled
  * down for longer numbers ([tileFontSizeSp]) so 4-digit tiles stay readable.
  *
- * ## Animation-readiness (UIB-1 has NO animation requirement)
- * Tiles are keyed by [Tile.id] and positioned by absolute `offset` over a single
- * [Box], so FEL-1 (slide/merge animation, Sprint 3) can later animate the offset
- * per id without restructuring this renderer. UIB-1 itself renders tiles directly
- * at their grid positions.
+ * ## Slide animation (FEL-1)
+ * Tiles are keyed by [Tile.id] and positioned by an absolute `offset` over a single
+ * [Box]. Each keyed tile owns an [Animatable] of its top-left offset; because the
+ * `key(tile.id)` block is stable across recompositions, a SURVIVING tile (same id,
+ * new position) keeps its animatable and **slides** from its old offset to the new
+ * one — `tile.id` is what gives the slide its continuity. A tile that has no prior
+ * state (a freshly **spawned** tile or a **merged** result tile — both minted with
+ * NEW ids) initializes its animatable AT its target offset, so it simply appears in
+ * place with **no flicker / no teleport from the origin**. Slide duration & easing are
+ * read from [FuseTheme.motion] (`tileSlideMs` / `tileSlideEasing`), so FEL-8 can flip
+ * the whole board to reduced motion (durations -> ~1ms, an effective snap) by swapping
+ * the provided [FuseMotion] — nothing here hardcodes a duration or curve.
+ *
+ * The position->offset math lives in [BoardGeometry] (pure, unit-tested in commonTest).
+ *
+ * ## What FEL-1 deliberately does NOT do (FEL-2 / FEL-3)
+ * This is design (a) — a position-diff renderer driven only by the new [Board]. Surviving
+ * tiles slide; spawned and merged-result tiles appear cleanly in place. The two MERGING
+ * SOURCE tiles are not slid INTO the result (they vanish from the new board and the result
+ * appears at its target) — sliding the sources together is the merge polish handled by
+ * FEL-2, and the merged-result/spawn entrance POP is FEL-3. Hook for those: add an optional
+ * `transition: BoardTransition?` param fed by `GameScreen` from the store's `lastMerges` /
+ * spawn data; the per-id animatable map below is already the right home for it.
  */
 @Composable
 fun BoardView(
@@ -63,6 +88,7 @@ fun BoardView(
     modifier: Modifier = Modifier,
 ) {
     val colors = FuseTheme.colors
+    val motion = FuseTheme.motion
     val n = board.size
 
     BoxWithConstraints(
@@ -71,26 +97,15 @@ fun BoardView(
             .clip(FuseTheme.shapes.card)
             .background(colors.boardBg),
     ) {
-        // Total proportional units along one side: pad on both ends, n cells, (n-1) gaps.
-        val totalUnits =
-            Dimens.padRatio * 2 + Dimens.cellRatio * n + Dimens.gapRatio * (n - 1)
-        val side = maxWidth
-        val unit = side / totalUnits
-
-        val pad = unit * Dimens.padRatio
-        val cell = unit * Dimens.cellRatio
-        val gap = unit * Dimens.gapRatio
-
-        // Top-left of cell (row, col).
-        fun cellOffsetX(col: Int) = pad + (cell + gap) * col
-        fun cellOffsetY(row: Int) = pad + (cell + gap) * row
+        val geometry = BoardGeometry.forBoard(n, maxWidth.value)
+        val cell = geometry.cell.dp
 
         // Empty cell slots (subtle card2 background) for every grid position.
         for (row in 0 until n) {
             for (col in 0 until n) {
                 Box(
                     modifier = Modifier
-                        .offset(x = cellOffsetX(col), y = cellOffsetY(row))
+                        .offset(x = geometry.offsetX(col).dp, y = geometry.offsetY(row).dp)
                         .size(cell)
                         .clip(FuseTheme.shapes.tile)
                         .background(colors.card2),
@@ -98,16 +113,16 @@ fun BoardView(
             }
         }
 
-        // Occupied tiles, keyed by tile id (animation-ready for FEL-1).
+        // Occupied tiles, each keyed by its id so its slide animatable survives
+        // recomposition (a surviving tile slides; a new-id tile appears in place).
         for ((position, tile) in board.tilesWithPositions()) {
             key(tile.id) {
                 TileCell(
                     tile = tile,
+                    targetX = geometry.offsetX(position.col).dp,
+                    targetY = geometry.offsetY(position.row).dp,
                     size = cell,
-                    modifier = Modifier.offset(
-                        x = cellOffsetX(position.col),
-                        y = cellOffsetY(position.row),
-                    ),
+                    motion = motion,
                 )
             }
         }
@@ -117,12 +132,33 @@ fun BoardView(
 @Composable
 private fun TileCell(
     tile: Tile,
-    size: androidx.compose.ui.unit.Dp,
+    targetX: Dp,
+    targetY: Dp,
+    size: Dp,
+    motion: FuseMotion,
     modifier: Modifier = Modifier,
 ) {
+    // One Offset animatable per tile id. This whole composable sits inside key(tile.id),
+    // so the remember SURVIVES recomposition for a surviving tile (same id, new target ->
+    // it slides) and is FRESH for a new id (spawn / merge result). Seeded AT the first
+    // target so a new-id tile appears in place — never sliding in from (0,0): no flicker.
+    val target = Offset(targetX.value, targetY.value)
+    val anim = remember { Animatable(target, Offset.VectorConverter) }
+
+    LaunchedEffect(target, motion) {
+        anim.animateTo(
+            targetValue = target,
+            animationSpec = tween(
+                durationMillis = motion.tileSlideMs,
+                easing = motion.tileSlideEasing,
+            ),
+        )
+    }
+
     val tileColors = TileRamp.forValue(tile.value)
     Box(
         modifier = modifier
+            .offset(x = anim.value.x.dp, y = anim.value.y.dp)
             .size(size)
             .clip(FuseTheme.shapes.tile)
             .background(tileColors.bg),
