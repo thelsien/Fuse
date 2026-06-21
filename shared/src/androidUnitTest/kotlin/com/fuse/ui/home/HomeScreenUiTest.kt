@@ -132,4 +132,78 @@ class HomeScreenUiTest {
         assertEquals("999", formatHomeScore(999L))
         assertEquals("1 048 576", formatHomeScore(1_048_576L))
     }
+
+    // --- SHL-4: Resume-on-launch choice ----------------------------------------
+
+    @OptIn(ExperimentalTestApi::class)
+    @Test
+    fun whenNotResumableShowsPlayClassicOnly() = runComposeUiTest {
+        setContent {
+            FuseTheme {
+                HomeScreen(
+                    best = 0L,
+                    onPlayClassic = {},
+                    onOpenDaily = {},
+                    onOpenSettings = {},
+                    canResume = false,
+                )
+            }
+        }
+
+        // Default (no resumable game): the single Play Classic CTA, no Continue / New game.
+        onNodeWithTag(HomeScreenTags.CLASSIC).assertExists()
+        onNodeWithTag(HomeScreenTags.CONTINUE).assertDoesNotExist()
+        onNodeWithTag(HomeScreenTags.NEW_GAME).assertDoesNotExist()
+    }
+
+    @OptIn(ExperimentalTestApi::class)
+    @Test
+    fun whenResumableShowsContinueAndNewGameInsteadOfClassic() = runComposeUiTest {
+        setContent {
+            FuseTheme {
+                HomeScreen(
+                    best = 4096L,
+                    onPlayClassic = {},
+                    onOpenDaily = {},
+                    onOpenSettings = {},
+                    canResume = true,
+                    savedScore = 1234L,
+                )
+            }
+        }
+
+        // Resumable: Continue (primary) + New game replace the single Play Classic CTA.
+        onNodeWithTag(HomeScreenTags.CONTINUE).assertExists()
+        onNodeWithTag(HomeScreenTags.NEW_GAME).assertExists()
+        onNodeWithTag(HomeScreenTags.CLASSIC).assertDoesNotExist()
+    }
+
+    @OptIn(ExperimentalTestApi::class)
+    @Test
+    fun continueInvokesOnContinueAndNewGameInvokesOnNewGame() = runComposeUiTest {
+        var continued = 0
+        var started = 0
+        setContent {
+            FuseTheme {
+                HomeScreen(
+                    best = 0L,
+                    onPlayClassic = {},
+                    onOpenDaily = {},
+                    onOpenSettings = {},
+                    canResume = true,
+                    savedScore = 64L,
+                    onContinue = { continued++ },
+                    onNewGame = { started++ },
+                )
+            }
+        }
+
+        onNodeWithTag(HomeScreenTags.CONTINUE).assertHasClickAction().performClick()
+        assertEquals(1, continued)
+        assertEquals(0, started)
+
+        onNodeWithTag(HomeScreenTags.NEW_GAME).assertHasClickAction().performClick()
+        assertEquals(1, started)
+        assertEquals(1, continued)
+    }
 }

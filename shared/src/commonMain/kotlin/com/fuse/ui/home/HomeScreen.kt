@@ -46,6 +46,15 @@ import com.fuse.ui.theme.FuseTheme
  *    weighted spacer that pushes the interactive controls (Classic / Daily / Settings) into the
  *    LOWER / thumb area for one-handed reach on tall devices.
  *
+ * ## SHL-4 — Resume-on-launch choice (two-button Home)
+ * When a **resumable** in-progress game exists ([canResume] == `true`), Home replaces the single
+ * "Play Classic" CTA with an explicit choice: a primary **Continue** button (resumes the saved game
+ * — [onContinue] — and shows the saved score for context) AND a secondary **New game** button
+ * ([onNewGame] — starts fresh). When no resumable game exists, Home shows the single **Play Classic**
+ * CTA as before ([onPlayClassic]). This surfaces the choice instead of silently auto-resuming or
+ * silently discarding a save. The store decides resumability (it auto-resumes on init and projects
+ * `canResume` reactively); Home is purely presentational — `App()` wires the callbacks/values.
+ *
  * ## Styling — tokens only (no literal hex)
  * Background is `FuseTheme.colors.bg`; the title uses the brand mint/accent; the best-score card
  * is a `card`-clipped, hair-lined surface with a `gold` value (the trophy accent, matching the
@@ -55,11 +64,20 @@ import com.fuse.ui.theme.FuseTheme
  * tag, not text.
  *
  * @param best the best score to display (sourced from the game store — see `App()`).
- * @param onPlayClassic invoked when the player taps the primary **Classic** CTA.
+ * @param onPlayClassic invoked when the player taps the primary **Classic** CTA (shown only when
+ *   there is NO resumable game — i.e. [canResume] is `false`). Starts a fresh game.
  * @param onOpenDaily invoked when the player taps **Daily** (placeholder for Sprint 5).
  * @param onOpenSettings invoked when the player taps **Settings** (SHL-3 wires the real screen).
  * @param modifier outer modifier.
  * @param dailyEnabled whether the Daily entry point is active; defaults to `false` (placeholder).
+ * @param canResume SHL-4 — `true` iff a resumable in-progress game exists. When `true`, Home shows
+ *   **Continue** + **New game** instead of the single **Play Classic** CTA. Defaults to `false`.
+ * @param savedScore SHL-4 — the saved game's current score, shown on the **Continue** button for
+ *   context (only meaningful when [canResume] is `true`). Defaults to `0`.
+ * @param onContinue SHL-4 — invoked when the player taps **Continue**: resumes the saved game (the
+ *   store already holds it). Defaults to [onPlayClassic] for callers that don't use resume.
+ * @param onNewGame SHL-4 — invoked when the player taps **New game** while a resumable game exists:
+ *   starts a fresh game (discarding the save). Defaults to [onPlayClassic].
  */
 @Composable
 fun HomeScreen(
@@ -69,6 +87,10 @@ fun HomeScreen(
     onOpenSettings: () -> Unit,
     modifier: Modifier = Modifier,
     dailyEnabled: Boolean = false,
+    canResume: Boolean = false,
+    savedScore: Long = 0L,
+    onContinue: () -> Unit = onPlayClassic,
+    onNewGame: () -> Unit = onPlayClassic,
 ) {
     val c = FuseTheme.colors
     Box(
@@ -114,13 +136,31 @@ fun HomeScreen(
                 verticalArrangement = Arrangement.spacedBy(14.dp),
                 horizontalAlignment = Alignment.CenterHorizontally,
             ) {
-                GradientButton(
-                    label = "Play Classic",
-                    gradient = FuseBrand.accentGradient,
-                    contentColor = Color.White,
-                    onClick = onPlayClassic,
-                    tag = HomeScreenTags.CLASSIC,
-                )
+                // SHL-4 — when a resumable game exists, the primary action becomes "Continue"
+                // (with the saved score for context) plus an explicit "New game"; otherwise the
+                // single "Play Classic" CTA starts fresh as before.
+                if (canResume) {
+                    GradientButton(
+                        label = "Continue · ${formatHomeScore(savedScore)}",
+                        gradient = FuseBrand.accentGradient,
+                        contentColor = Color.White,
+                        onClick = onContinue,
+                        tag = HomeScreenTags.CONTINUE,
+                    )
+                    OutlineButton(
+                        label = "New game",
+                        onClick = onNewGame,
+                        tag = HomeScreenTags.NEW_GAME,
+                    )
+                } else {
+                    GradientButton(
+                        label = "Play Classic",
+                        gradient = FuseBrand.accentGradient,
+                        contentColor = Color.White,
+                        onClick = onPlayClassic,
+                        tag = HomeScreenTags.CLASSIC,
+                    )
+                }
                 GradientButton(
                     label = if (dailyEnabled) "Daily" else "Daily — Coming soon",
                     gradient = FuseBrand.goldGradient,
@@ -266,6 +306,12 @@ object HomeScreenTags {
     const val BEST_CARD: String = "home_best_card"
     const val BEST_VALUE: String = "home_best_value"
     const val CLASSIC: String = "home_classic"
+
+    /** SHL-4 — primary "Continue" CTA (resumes the saved game); shown only when resumable. */
+    const val CONTINUE: String = "home_continue"
+
+    /** SHL-4 — "New game" action shown alongside Continue (starts fresh, discards the save). */
+    const val NEW_GAME: String = "home_new_game"
     const val DAILY: String = "home_daily"
     const val SETTINGS: String = "home_settings"
 }

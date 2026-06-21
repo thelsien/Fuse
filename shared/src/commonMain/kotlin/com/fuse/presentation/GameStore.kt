@@ -11,6 +11,7 @@ import com.fuse.engine.MoveOutcome
 import com.fuse.engine.Position
 import com.fuse.engine.Score
 import com.fuse.engine.Tile
+import com.fuse.engine.isResumable
 import com.fuse.engine.newGame
 import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.flow.Flow
@@ -315,6 +316,13 @@ sealed interface GameEffect {
  *   or `null` on a blocked move / new game / resume (where the "appearance" of tiles is
  *   the whole board, not a single post-move spawn). Its [Tile.id] targets the entrance.
  * @property spawnPosition where [spawned] landed, or `null` when nothing spawned.
+ * @property canResume SHL-4 — `true` iff the game the store currently holds is a
+ *   resumable, in-progress game (see [com.fuse.engine.isResumable]: not lost,
+ *   `moveCount > 0`). Drives Home's **Continue + New game** choice: the store resumes a
+ *   save on init, so this projects whether that resumed game is worth offering as a
+ *   Continue. It is recomputed on every reduce, so it stays reactive — `true` after
+ *   resuming a real save, `false` after a [GameIntent.NewGame] (fresh board, moveCount 0)
+ *   or once a move loses the game (phase Lost).
  */
 data class GameUiState(
     val board: Board,
@@ -326,6 +334,7 @@ data class GameUiState(
     val gameOver: Boolean = false,
     val spawned: Tile? = null,
     val spawnPosition: Position? = null,
+    val canResume: Boolean = false,
 ) {
     /** Convenience for the swipe `enabled` flag: input is live unless the game is lost. */
     val isGameOver: Boolean get() = gameOver
@@ -352,6 +361,9 @@ data class GameUiState(
             score = state.score,
             phase = state.phase,
             gameOver = state.phase.isLost,
+            // SHL-4 — project resumability of the very state we're rendering. For a fresh
+            // newGame (moveCount 0) this is false; for a resumed save (moveCount > 0) true.
+            canResume = isResumable(state),
         )
 
         /** Projection after an ACCEPTED move, carrying that move's events. */
@@ -367,6 +379,9 @@ data class GameUiState(
             // its entrance precisely (the engine already computed this on the outcome).
             spawned = outcome.spawned,
             spawnPosition = outcome.spawnPosition,
+            // SHL-4 — after the first accepted move (moveCount ≥ 1) the game becomes
+            // resumable; on the move that loses the game (phase Lost) it flips back to false.
+            canResume = isResumable(state),
         )
     }
 }
