@@ -1,12 +1,15 @@
 package com.fuse.di
 
+import com.fuse.data.DailyRepository
 import com.fuse.data.DefaultGreeting
 import com.fuse.data.GameRepository
 import com.fuse.data.Greeting
+import com.fuse.data.SettingsDailyRepository
 import com.fuse.data.SettingsGameRepository
 import com.fuse.data.platformSettingsModule
 import com.fuse.daily.DailyClock
 import com.fuse.daily.SystemDailyClock
+import com.fuse.presentation.DailyStore
 import com.fuse.domain.GetGreetingUseCase
 import com.fuse.feedback.ColorblindSettings
 import com.fuse.feedback.FeedbackPreferences
@@ -56,6 +59,9 @@ val dataModule: Module = module {
     // platform `Settings` bound by [platformSettingsModule] (SharedPreferences on
     // Android, NSUserDefaults on iOS).
     single<GameRepository> { SettingsGameRepository(get()) }
+    // DLY-4: the single daily save slot's persistence over the SAME platform `Settings`
+    // (independent key from Classic's game blob — see SettingsDailyRepository.KEY_DAILY).
+    single<DailyRepository> { SettingsDailyRepository(get()) }
 }
 
 /** Domain layer — use cases. Sample use case consuming the data abstraction. */
@@ -70,6 +76,10 @@ val presentationModule: Module = module {
     // whole app shares one game instance. The store takes the [GameRepository] so it
     // loads any saved game/best on init (resume) and persists after every change.
     single { GameStore(repository = get()) }
+    // DLY-4: the Daily Challenge MVI store. `single` — it holds the live daily run, so the
+    // whole app shares one. It resolves the [DailyClock] (today's UTC day → today's puzzle)
+    // and the [DailyRepository] (the single slot: resume today / reset on a new day).
+    single { DailyStore(clock = get(), repository = get()) }
 }
 
 /**

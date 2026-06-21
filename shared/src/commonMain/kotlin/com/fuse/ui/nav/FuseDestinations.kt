@@ -19,4 +19,7 @@ object FuseDestinations {
     const val HOME: String = "home"
     const val GAME: String = "game"
     const val SETTINGS: String = "settings"
+
+    /** DLY-4 — the playable Daily Challenge ([com.fuse.ui.daily.DailyScreen]). */
+    const val DAILY: String = "daily"
 }

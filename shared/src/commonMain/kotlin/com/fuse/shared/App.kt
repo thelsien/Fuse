@@ -14,6 +14,7 @@ import com.fuse.feedback.ColorblindSettings
 import com.fuse.feedback.ReducedMotionSettings
 import com.fuse.presentation.GameIntent
 import com.fuse.presentation.GameStore
+import com.fuse.ui.daily.DailyScreen
 import com.fuse.ui.game.GameScreen
 import com.fuse.ui.home.HomeScreen
 import com.fuse.ui.nav.FuseDestinations
@@ -126,9 +127,22 @@ private fun AppShell(
                     store.accept(GameIntent.NewGame())
                     navController.navigate(FuseDestinations.GAME)
                 },
-                onOpenDaily = { /* SHL: Sprint 5 — no-op placeholder */ },
+                // DLY-4 — Daily is now enabled: navigate to the playable Daily screen.
+                dailyEnabled = true,
+                onOpenDaily = { navController.navigate(FuseDestinations.DAILY) },
                 onOpenSettings = { navController.navigate(FuseDestinations.SETTINGS) },
                 modifier = Modifier.fillMaxSize(),
+            )
+        }
+        composable(FuseDestinations.DAILY) {
+            // DLY-4 — the playable Daily Challenge. The shared DailyStore (Koin singleton)
+            // resolves today's puzzle + the single slot; back pops to Home (system back on
+            // Android, the in-screen "‹ Home" affordance on iOS — same as Game/Settings).
+            DailyScreen(
+                onBack = { navController.popBackStack() },
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(FuseTheme.colors.bg),
             )
         }
         composable(FuseDestinations.GAME) {
