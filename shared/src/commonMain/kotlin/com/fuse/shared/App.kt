@@ -10,6 +10,7 @@ import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
+import com.fuse.feedback.ColorblindSettings
 import com.fuse.feedback.ReducedMotionSettings
 import com.fuse.presentation.GameStore
 import com.fuse.ui.game.GameScreen
@@ -43,9 +44,13 @@ import org.koin.compose.koinInject
 @Composable
 fun App() {
     val reducedMotionSettings: ReducedMotionSettings = koinInject()
+    // SHL-3 — the colorblind-mode seam, mirroring reduced-motion: read the holder in composition so
+    // a Settings flip recomposes App() and re-themes live. The palette behind the flag is ACC-1.
+    val colorblindSettings: ColorblindSettings = koinInject()
     FuseTheme(
         darkTheme = true,
         reducedMotion = reducedMotionSettings.reducedMotionEnabled,
+        colorblind = colorblindSettings.colorblindEnabled,
     ) {
         AppShell()
     }

@@ -44,10 +44,29 @@ import androidx.compose.runtime.setValue
  * so live recomposition still works). The App-root wiring needs no change — the switch stays
  * exactly here.
  *
+ * ## SHL-3 — persistence
+ * SHL-3 added the Settings UI that flips this flag and gave it durable persistence via
+ * [FeedbackPreferences]: the Koin graph seeds [reducedMotionEnabled] from the persisted value at
+ * startup (so a relaunch restores the user's choice — default OFF when never set) and [setEnabled]
+ * writes through on every flip. The App-root wiring is unchanged — the switch stays exactly here.
+ * Tests/previews use the [NoOpFeedbackPreferences] default, so no real `Settings` is required.
+ *
+ * @param reducedMotionEnabled the initial value (seeded from persistence by Koin; defaults OFF =
+ *   full motion for direct construction in tests/previews).
+ * @param preferences the write-through persistence seam; defaults to [NoOpFeedbackPreferences].
  * @property reducedMotionEnabled `true` to force reduced motion app-wide; `false` (default)
  *   for full motion. Compose-state-backed, so flipping it live recomposes everything that
  *   reads the motion through [com.fuse.ui.theme.FuseTheme].
  */
-class ReducedMotionSettings(reducedMotionEnabled: Boolean = false) {
+class ReducedMotionSettings(
+    reducedMotionEnabled: Boolean = false,
+    private val preferences: FeedbackPreferences = NoOpFeedbackPreferences,
+) {
     var reducedMotionEnabled: Boolean by mutableStateOf(reducedMotionEnabled)
+
+    /** Flip the switch AND persist so it survives relaunch (the Settings-screen path). */
+    fun setEnabled(enabled: Boolean) {
+        reducedMotionEnabled = enabled
+        preferences.saveReducedMotion(enabled)
+    }
 }

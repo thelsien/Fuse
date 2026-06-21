@@ -1,6 +1,7 @@
 package com.fuse.ui.settings
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -10,32 +11,102 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawingPadding
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.material3.Switch
+import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
+import com.fuse.feedback.ColorblindSettings
+import com.fuse.feedback.HapticsSettings
+import com.fuse.feedback.ReducedMotionSettings
+import com.fuse.feedback.SoundSettings
 import com.fuse.ui.theme.FuseTheme
+import org.koin.compose.koinInject
 
 /**
- * SHL-2 — placeholder **Settings** destination.
+ * SHL-3 — the real **Settings** screen: four persisted, live-applied toggles.
  *
- * SHL-2 only owns the Settings *route* and a navigable, back-able shell; SHL-3 fills this with
- * the real content (the three toggles: reduced motion, haptics, sound). For now it shows a title,
- * a "coming soon" line, and an in-screen back affordance that calls [onBack] — the one coherent
- * back this screen exposes. On Android the same destination is also popped by the system back
- * (wired by the NavHost in `App()`); on iOS this button is the back affordance (no hardware back).
+ * ## Two layers (testability)
+ * This file exposes the screen in two pieces, the same split as [com.fuse.ui.home.HomeScreen]:
+ *  - A **presentational** [SettingsScreen] overload that takes the four current values plus four
+ *    `onToggle` callbacks and an [onBack]. It owns NO state and needs no Koin, so UI tests drive it
+ *    with plain booleans/lambdas.
+ *  - A thin **stateful wrapper** [SettingsScreen] (the one `App()`/the nav graph calls) that
+ *    resolves the four settings holders from Koin, reads their Compose-state-backed flags (so the
+ *    switches reflect live state), and binds each `onToggle` to the holder's `setEnabled` (which
+ *    flips the flag live AND persists it).
  *
- * Presentational + value-driven (only an [onBack] callback) so it renders under preview/test with
- * no Koin. SHL-3 will add settings state/callbacks here.
+ * ## The four toggles (acceptance criteria)
+ *  - **Sound** → [SoundSettings.setEnabled]; the [com.fuse.feedback.SoundCoordinator] reads the
+ *    flag at dispatch, so the next merge is muted/unmuted immediately.
+ *  - **Haptics** → [HapticsSettings.setEnabled]; same live read by
+ *    [com.fuse.feedback.HapticsCoordinator].
+ *  - **Reduced motion** → [ReducedMotionSettings.setEnabled]; `App()` reads it into
+ *    `FuseTheme(reducedMotion = …)`, so flipping it RE-THEMES live — slides/particles/combo
+ *    collapse immediately (FEL-8).
+ *  - **Colorblind mode** → [ColorblindSettings.setEnabled]; `App()` reads it into
+ *    `FuseTheme(colorblind = …)`. The toggle/persistence/seam ship here; the colorblind-safe
+ *    PALETTE behind the flag is ACC-1 (Sprint 10).
  *
- * @param onBack invoked to navigate back to Home (nav `popBackStack`).
- * @param modifier outer modifier.
+ * All four are persisted via `multiplatform-settings` (the holders write through on `setEnabled`)
+ * and seeded on launch, so they survive a relaunch.
+ *
+ * ## Styling — tokens only
+ * Token-styled list of labeled-`Switch` rows (each a `card`-clipped, hair-lined surface) plus the
+ * existing "‹ Home" back affordance wired to [onBack] (nav `popBackStack`). Stable per-row tags
+ * ([SettingsScreenTags]) let tests target switches without depending on copy.
+ *
+ * @param onBack navigate back to Home (nav `popBackStack`).
  */
 @Composable
 fun SettingsScreen(
+    onBack: () -> Unit,
+    modifier: Modifier = Modifier,
+    soundSettings: SoundSettings = koinInject(),
+    hapticsSettings: HapticsSettings = koinInject(),
+    reducedMotionSettings: ReducedMotionSettings = koinInject(),
+    colorblindSettings: ColorblindSettings = koinInject(),
+) {
+    SettingsScreen(
+        sound = soundSettings.soundEnabled,
+        haptics = hapticsSettings.hapticsEnabled,
+        reducedMotion = reducedMotionSettings.reducedMotionEnabled,
+        colorblind = colorblindSettings.colorblindEnabled,
+        onToggleSound = soundSettings::setEnabled,
+        onToggleHaptics = hapticsSettings::setEnabled,
+        onToggleReducedMotion = reducedMotionSettings::setEnabled,
+        onToggleColorblind = colorblindSettings::setEnabled,
+        onBack = onBack,
+        modifier = modifier,
+    )
+}
+
+/**
+ * SHL-3 — the **presentational** Settings screen (value-driven; no Koin, no state).
+ *
+ * @param sound / [haptics] / [reducedMotion] / [colorblind] the current toggle values.
+ * @param onToggleSound / [onToggleHaptics] / [onToggleReducedMotion] / [onToggleColorblind] called
+ *   with the new value when the matching switch is flipped.
+ * @param onBack navigate back to Home.
+ */
+@Composable
+fun SettingsScreen(
+    sound: Boolean,
+    haptics: Boolean,
+    reducedMotion: Boolean,
+    colorblind: Boolean,
+    onToggleSound: (Boolean) -> Unit,
+    onToggleHaptics: (Boolean) -> Unit,
+    onToggleReducedMotion: (Boolean) -> Unit,
+    onToggleColorblind: (Boolean) -> Unit,
     onBack: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -47,6 +118,7 @@ fun SettingsScreen(
             .safeDrawingPadding()
             .padding(horizontal = 24.dp, vertical = 16.dp)
             .testTag(SettingsScreenTags.ROOT),
+        horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         // Top bar: a single back affordance (left-aligned), coherent with the nav back stack.
         Row(
@@ -61,23 +133,95 @@ fun SettingsScreen(
             }
         }
 
-        Spacer(Modifier.heightIn(min = 16.dp))
+        Spacer(Modifier.heightIn(min = 8.dp))
 
+        Text(
+            text = "Settings",
+            style = FuseTheme.type.titleL.copy(color = c.text),
+            modifier = Modifier.testTag(SettingsScreenTags.TITLE),
+        )
+
+        Spacer(Modifier.heightIn(min = 24.dp))
+
+        // The four toggle rows.
         Column(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(8.dp),
+            modifier = Modifier
+                .fillMaxWidth()
+                .widthIn(max = 480.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            Text(
-                text = "Settings",
-                style = FuseTheme.type.titleL.copy(color = c.text),
-                modifier = Modifier.testTag(SettingsScreenTags.TITLE),
+            ToggleRow(
+                label = "Sound",
+                checked = sound,
+                onToggle = onToggleSound,
+                rowTag = SettingsScreenTags.SOUND_ROW,
+                switchTag = SettingsScreenTags.SOUND_SWITCH,
             )
-            Text(
-                text = "Coming soon",
-                style = FuseTheme.type.headingM.copy(color = c.sub),
+            ToggleRow(
+                label = "Haptics",
+                checked = haptics,
+                onToggle = onToggleHaptics,
+                rowTag = SettingsScreenTags.HAPTICS_ROW,
+                switchTag = SettingsScreenTags.HAPTICS_SWITCH,
+            )
+            ToggleRow(
+                label = "Reduced motion",
+                checked = reducedMotion,
+                onToggle = onToggleReducedMotion,
+                rowTag = SettingsScreenTags.REDUCED_MOTION_ROW,
+                switchTag = SettingsScreenTags.REDUCED_MOTION_SWITCH,
+            )
+            ToggleRow(
+                label = "Colorblind mode",
+                checked = colorblind,
+                onToggle = onToggleColorblind,
+                rowTag = SettingsScreenTags.COLORBLIND_ROW,
+                switchTag = SettingsScreenTags.COLORBLIND_SWITCH,
             )
         }
+    }
+}
+
+/** One token-styled settings row: a label on the left, a [Switch] on the right. */
+@Composable
+private fun ToggleRow(
+    label: String,
+    checked: Boolean,
+    onToggle: (Boolean) -> Unit,
+    rowTag: String,
+    switchTag: String,
+    modifier: Modifier = Modifier,
+) {
+    val c = FuseTheme.colors
+    val shape = FuseTheme.shapes.card
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .clip(shape)
+            .background(c.card)
+            .border(1.dp, c.line, shape)
+            .padding(horizontal = 20.dp, vertical = 14.dp)
+            .testTag(rowTag)
+            .semantics { contentDescription = "$label ${if (checked) "on" else "off"}" },
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.SpaceBetween,
+    ) {
+        Text(
+            text = label,
+            style = FuseTheme.type.headingM.copy(color = c.text),
+        )
+        Switch(
+            checked = checked,
+            onCheckedChange = onToggle,
+            modifier = Modifier.testTag(switchTag),
+            colors = SwitchDefaults.colors(
+                checkedThumbColor = c.bg,
+                checkedTrackColor = c.accent,
+                uncheckedThumbColor = c.sub,
+                uncheckedTrackColor = c.card2,
+                uncheckedBorderColor = c.line,
+            ),
+        )
     }
 }
 
@@ -86,4 +230,13 @@ object SettingsScreenTags {
     const val ROOT: String = "settings_screen"
     const val TITLE: String = "settings_title"
     const val BACK: String = "settings_back"
+
+    const val SOUND_ROW: String = "settings_sound_row"
+    const val SOUND_SWITCH: String = "settings_sound_switch"
+    const val HAPTICS_ROW: String = "settings_haptics_row"
+    const val HAPTICS_SWITCH: String = "settings_haptics_switch"
+    const val REDUCED_MOTION_ROW: String = "settings_reduced_motion_row"
+    const val REDUCED_MOTION_SWITCH: String = "settings_reduced_motion_switch"
+    const val COLORBLIND_ROW: String = "settings_colorblind_row"
+    const val COLORBLIND_SWITCH: String = "settings_colorblind_switch"
 }
