@@ -10,6 +10,7 @@ import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.runComposeUiTest
 import androidx.compose.ui.test.swipeLeft
 import com.fuse.daily.DailyPuzzle
+import com.fuse.daily.Sharer
 import com.fuse.engine.Board
 import com.fuse.presentation.DailyStore
 import com.fuse.presentation.DailyStreakState
@@ -107,7 +108,7 @@ class DailyScreenUiTest {
     @Test
     fun aSwipeThatChangesBoardUpdatesTheCounter() = runComposeUiTest {
         val store = trivialStore()
-        setContent { FuseTheme { DailyScreen(store = store, streakStore = streakStore()) } }
+        setContent { FuseTheme { DailyScreen(store = store, streakStore = streakStore(), sharer = FakeSharer()) } }
 
         onNodeWithTag(DailyHudTags.MOVES).assertTextEquals("0")
         onNodeWithTag(DailyScreenTags.BOARD).performTouchInput { swipeLeft() }
@@ -135,7 +136,7 @@ class DailyScreenUiTest {
             par = 2,
         )
         val store = DailyStore(clock = FixedClock(LocalDate(2026, 6, 21)), puzzle = puzzle)
-        setContent { FuseTheme { DailyScreen(store = store, streakStore = streakStore()) } }
+        setContent { FuseTheme { DailyScreen(store = store, streakStore = streakStore(), sharer = FakeSharer()) } }
 
         onNodeWithTag(DailyScreenTags.BOARD).performTouchInput { swipeLeft() }
         waitForIdle()
@@ -166,7 +167,7 @@ class DailyScreenUiTest {
             par = 2,
         )
         val store = DailyStore(clock = FixedClock(LocalDate(2026, 6, 21)), puzzle = puzzle)
-        setContent { FuseTheme { DailyScreen(store = store, streakStore = streakStore()) } }
+        setContent { FuseTheme { DailyScreen(store = store, streakStore = streakStore(), sharer = FakeSharer()) } }
 
         onNodeWithTag(DailyScreenTags.BOARD).performTouchInput { swipeLeft() }
         waitForIdle()
@@ -181,12 +182,12 @@ class DailyScreenUiTest {
     @Test
     fun solvingShowsTheSolvedOverlay() = runComposeUiTest {
         val store = trivialStore()
-        setContent { FuseTheme { DailyScreen(store = store, streakStore = streakStore()) } }
+        setContent { FuseTheme { DailyScreen(store = store, streakStore = streakStore(), sharer = FakeSharer()) } }
         onNodeWithTag(DailyScreenTags.BOARD).performTouchInput { swipeLeft() }
         waitForIdle()
         onNodeWithTag(DailyScreenTags.SOLVED_OVERLAY).assertIsDisplayed()
         onNodeWithTag(DailyScreenTags.SOLVED_SUMMARY).assertTextContains("Par 1", substring = true)
-        onNodeWithTag(DailyScreenTags.SHARE_PLACEHOLDER).assertExists()
+        onNodeWithTag(DailyScreenTags.SHARE_BUTTON).assertExists()
     }
 
     @OptIn(ExperimentalTestApi::class)
@@ -210,13 +211,61 @@ class DailyScreenUiTest {
         onNodeWithTag(DailyScreenTags.SOLVED_STREAK).assertTextContains("Best 7", substring = true)
     }
 
+    /** A fake [Sharer] that captures the last text it was asked to share (no OS sheet). */
+    private class FakeSharer : Sharer {
+        var lastShared: String? = null
+        override fun share(text: String) { lastShared = text }
+    }
+
+    @OptIn(ExperimentalTestApi::class)
+    @Test
+    fun solvedOverlayShowsAShareButton() = runComposeUiTest {
+        // DLY-7 — the solved overlay surfaces a real Share button (not the old placeholder).
+        val solved = unsolvedState().copy(solved = true, winningMoves = 4)
+        setContent {
+            FuseTheme {
+                DailyScreenContent(
+                    state = solved,
+                    streak = DailyStreakState(current = 3, longest = 7),
+                    onSwipe = {},
+                    onUndo = {},
+                    onRestart = {},
+                )
+            }
+        }
+        onNodeWithTag(DailyScreenTags.SHARE_BUTTON).assertIsDisplayed()
+    }
+
+    @OptIn(ExperimentalTestApi::class)
+    @Test
+    fun tappingShareBuildsACardWithDayTargetMovesAndSharesIt() = runComposeUiTest {
+        // DLY-7 — a live solve, then tapping Share, calls the (fake) Sharer with a non-empty
+        // card carrying the day, target and move count. We assert the card text, not the OS sheet.
+        val sharer = FakeSharer()
+        val store = trivialStore() // target 32, par 1, day #N from the fixed 2026-06-21 clock.
+        setContent {
+            FuseTheme { DailyScreen(store = store, streakStore = streakStore(), sharer = sharer) }
+        }
+
+        onNodeWithTag(DailyScreenTags.BOARD).performTouchInput { swipeLeft() }
+        waitForIdle()
+        onNodeWithTag(DailyScreenTags.SHARE_BUTTON).performClick()
+        waitForIdle()
+
+        val card = sharer.lastShared
+        requireNotNull(card) { "Share button should have called Sharer.share(...)" }
+        assert(card.contains("Fuse Daily #")) { "card missing day header: $card" }
+        assert(card.contains("🎯 32")) { "card missing target: $card" }
+        assert(card.contains("solved in 1 move")) { "card missing move count: $card" }
+    }
+
     @OptIn(ExperimentalTestApi::class)
     @Test
     fun solvingARealRunRecordsAndShowsStreakOne() = runComposeUiTest {
         // DLY-5 end-to-end: a live solve drives the recorder (NoOp repo → fresh streak 1) and
         // the overlay shows it.
         val store = trivialStore()
-        setContent { FuseTheme { DailyScreen(store = store, streakStore = streakStore()) } }
+        setContent { FuseTheme { DailyScreen(store = store, streakStore = streakStore(), sharer = FakeSharer()) } }
         onNodeWithTag(DailyScreenTags.BOARD).performTouchInput { swipeLeft() }
         waitForIdle()
         onNodeWithTag(DailyScreenTags.SOLVED_STREAK).assertTextContains("Streak: 1", substring = true)
