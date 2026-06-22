@@ -198,6 +198,10 @@ class DailyStore(
         board: Board = currentBoard(),
     ): DailyUiState = DailyUiState(
         board = board,
+        // DLY-7 — the day's SHARED start board (no-spawn, fixed for the day; the same for every
+        // player). The share card's emoji grid is built from THIS, not [board] (the player's
+        // mid/solved board), so cards are comparable.
+        startBoard = puzzle.startBoard,
         moveCount = moves.size,
         target = puzzle.target,
         par = puzzle.par,
@@ -252,6 +256,9 @@ sealed interface DailyEffect {
  *
  * @property board the board to render ([com.fuse.ui.board.BoardView]); `startBoard`
  *   replayed through the accepted moves.
+ * @property startBoard the day's SHARED start board (no-spawn ⇒ fixed for the day, identical
+ *   for every player). DLY-7's share-card emoji grid is built from this (NOT [board]) so cards
+ *   are comparable between players.
  * @property moveCount the number of accepted moves so far (the move counter).
  * @property target the tile value to form to win (shown in the HUD).
  * @property par the optimal move count for today's puzzle (the player's benchmark).
@@ -265,6 +272,7 @@ sealed interface DailyEffect {
  */
 data class DailyUiState(
     val board: Board,
+    val startBoard: Board = board,
     val moveCount: Int,
     val target: Int,
     val par: Int,

@@ -12,6 +12,7 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import com.fuse.daily.DailyClock
 import com.fuse.daily.DailyPuzzle
+import com.fuse.daily.NoOpSharer
 import com.fuse.engine.Board
 import com.fuse.presentation.DailyStore
 import com.fuse.presentation.DailyStreakStore
@@ -84,6 +85,7 @@ class DailyNavigationUiTest {
                 DailyScreen(
                     store = store,
                     streakStore = DailyStreakStore(clock = FixedClock(LocalDate(2026, 6, 21))),
+                    sharer = NoOpSharer,
                     onBack = { navController.popBackStack() },
                 )
             }

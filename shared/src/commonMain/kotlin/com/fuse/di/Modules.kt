@@ -11,6 +11,7 @@ import com.fuse.data.SettingsGameRepository
 import com.fuse.data.platformSettingsModule
 import com.fuse.daily.DailyClock
 import com.fuse.daily.SystemDailyClock
+import com.fuse.daily.platformSharerModule
 import com.fuse.presentation.DailyStore
 import com.fuse.presentation.DailyStreakStore
 import com.fuse.domain.GetGreetingUseCase
@@ -161,6 +162,9 @@ val appModules: List<Module> = listOf(
     platformSettingsModule,
     platformHapticsModule,
     platformSoundModule,
+    // DLY-7 — the native share seam (ACTION_SEND chooser / UIActivityViewController). The
+    // Daily solved overlay resolves [com.fuse.daily.Sharer] from here to share the result card.
+    platformSharerModule,
     dataModule,
     domainModule,
     presentationModule,

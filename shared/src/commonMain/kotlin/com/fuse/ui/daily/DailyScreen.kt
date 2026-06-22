@@ -29,6 +29,8 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import com.fuse.daily.Sharer
+import com.fuse.daily.buildDailyShareCard
 import com.fuse.engine.Direction
 import com.fuse.presentation.DailyEffect
 import com.fuse.presentation.DailyIntent
@@ -68,6 +70,7 @@ fun DailyScreen(
     modifier: Modifier = Modifier,
     store: DailyStore = koinInject(),
     streakStore: DailyStreakStore = koinInject(),
+    sharer: Sharer = koinInject(),
     onBack: (() -> Unit)? = null,
 ) {
     val state by store.state.collectAsState()
@@ -92,10 +95,32 @@ fun DailyScreen(
         onSwipe = { store.accept(DailyIntent.Move(it)) },
         onUndo = { store.accept(DailyIntent.Undo) },
         onRestart = { store.accept(DailyIntent.Restart) },
+        // DLY-7 — Share builds the result card from the day's SHARED start board (so cards are
+        // comparable; never the player's mid-solve board), the result fields, and the live
+        // streak, then hands it to the platform [Sharer] (native share sheet). User-initiated.
+        onShare = { sharer.share(dailyShareCardFor(state, streak.current)) },
         onBack = onBack,
         modifier = modifier,
     )
 }
+
+/**
+ * DLY-7 — builds the share-card text for [state] using the day's SHARED start board.
+ *
+ * The grid source is [DailyUiState.startBoard] (the day's fixed no-spawn start board, the same
+ * for every player), NOT [DailyUiState.board] (the player's solved board, which differs per
+ * player) — so the emoji grids on shared cards compare directly. The streak comes from the live
+ * [DailyStreakState.current].
+ */
+private fun dailyShareCardFor(state: DailyUiState, currentStreak: Int): String =
+    buildDailyShareCard(
+        dayNumber = state.dayNumber,
+        target = state.target,
+        moves = state.winningMoves ?: state.moveCount,
+        par = state.par,
+        startBoard = state.startBoard,
+        currentStreak = currentStreak,
+    )
 
 /** Stateless content of [DailyScreen] — pure function of [state] + callbacks. */
 @Composable
@@ -106,6 +131,7 @@ fun DailyScreenContent(
     onRestart: () -> Unit,
     modifier: Modifier = Modifier,
     streak: DailyStreakState = DailyStreakState(),
+    onShare: () -> Unit = {},
     onBack: (() -> Unit)? = null,
 ) {
     val c = FuseTheme.colors
@@ -185,6 +211,7 @@ fun DailyScreenContent(
                 moves = state.winningMoves ?: state.moveCount,
                 par = state.par,
                 streak = streak,
+                onShare = onShare,
             )
         }
     }
@@ -267,17 +294,20 @@ private fun ControlButton(
 
 /**
  * The solved overlay: "Solved in N moves! (Par P)", the DLY-5 **streak** line
- * ("🔥 Streak: X · Best Y"), a placeholder for the DLY-7 share button, and a "come back
- * tomorrow" note. The board is locked while this shows.
+ * ("🔥 Streak: X · Best Y"), the DLY-7 **Share** button (builds + shares the result card), and a
+ * "come back tomorrow" note. The board is locked while this shows.
  *
  * @param streak the displayable streak — `current` is the live value (0 when broken),
  *   `longest` the all-time best. Rendered as a token-styled line under the move summary.
+ * @param onShare invoked when the Share button is tapped; builds the card and opens the native
+ *   share sheet (user-initiated; only presents the OS chooser, never auto-sends).
  */
 @Composable
 private fun SolvedOverlay(
     moves: Int,
     par: Int,
     streak: DailyStreakState,
+    onShare: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val c = FuseTheme.colors
@@ -322,21 +352,25 @@ private fun SolvedOverlay(
                             "Daily streak ${streak.current}, best ${streak.longest}"
                     },
             )
-            // DLY-7 — share button placeholder (disabled). Wired in DLY-7 to build a
-            // shareable result card from moves-vs-par + the day number.
+            // DLY-7 — the Share button. Tapping it builds the result card (day · target ·
+            // moves-vs-par + the day's shared start-board emoji grid + streak) and opens the
+            // native share sheet via the platform [Sharer]. Token-styled, tappable.
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
                     .heightIn(min = 48.dp)
                     .clip(FuseTheme.shapes.card)
                     .background(c.card2)
+                    .border(1.dp, c.line, FuseTheme.shapes.card)
+                    .clickable(onClick = onShare)
                     .padding(horizontal = 16.dp, vertical = 12.dp)
-                    .testTag(DailyScreenTags.SHARE_PLACEHOLDER),
+                    .testTag(DailyScreenTags.SHARE_BUTTON)
+                    .semantics { contentDescription = "Share your Daily result" },
                 contentAlignment = Alignment.Center,
             ) {
                 Text(
-                    "Share — Coming soon",
-                    style = FuseTheme.type.bodyM.copy(color = c.sub),
+                    "Share result",
+                    style = FuseTheme.type.headingM.copy(color = c.text),
                 )
             }
             Text(
@@ -360,7 +394,9 @@ object DailyScreenTags {
 
     /** DLY-5 — the streak line on the solved overlay ("🔥 Streak: X · Best Y"). */
     const val SOLVED_STREAK: String = "daily_solved_streak"
-    const val SHARE_PLACEHOLDER: String = "daily_share_placeholder"
+
+    /** DLY-7 — the Share button on the solved overlay (builds + shares the result card). */
+    const val SHARE_BUTTON: String = "daily_share_button"
 }
 
 /** Stable test tags for the Daily HUD stat values. */
