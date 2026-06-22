@@ -34,6 +34,15 @@ Podfile.lock
 # macOS
 .DS_Store
 
+# Secrets / signing / per-account config (ADS-0, Sprint 8) — NEVER commit these.
+# The spike uses only Google's PUBLIC AdMob test IDs (safe to commit); the REAL AdMob App ID /
+# ad-unit IDs and any signing material are injected at release from these gitignored files.
+secrets.properties
+google-services.json
+GoogleService-Info.plist
+*.keystore
+*.jks
+
 # Misc
 *.log
 .env

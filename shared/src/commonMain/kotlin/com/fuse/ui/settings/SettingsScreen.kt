@@ -17,6 +17,11 @@ import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -24,11 +29,14 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
+import com.fuse.ads.AdProvider
+import com.fuse.ads.AdsDebug
 import com.fuse.feedback.ColorblindSettings
 import com.fuse.feedback.HapticsSettings
 import com.fuse.feedback.ReducedMotionSettings
 import com.fuse.feedback.SoundSettings
 import com.fuse.ui.theme.FuseTheme
+import kotlinx.coroutines.launch
 import org.koin.compose.koinInject
 
 /**
@@ -74,6 +82,7 @@ fun SettingsScreen(
     hapticsSettings: HapticsSettings = koinInject(),
     reducedMotionSettings: ReducedMotionSettings = koinInject(),
     colorblindSettings: ColorblindSettings = koinInject(),
+    adProvider: AdProvider = koinInject(),
 ) {
     SettingsScreen(
         sound = soundSettings.soundEnabled,
@@ -86,7 +95,66 @@ fun SettingsScreen(
         onToggleColorblind = colorblindSettings::setEnabled,
         onBack = onBack,
         modifier = modifier,
+        // ADS-0 (Sprint 8 spike) — the debug-only "Show test ad" trigger, gated by AdsDebug.enabled
+        // and behind the spike branch. Resolves the AdProvider (Google-TEST rewarded ad on Android;
+        // Swift-bridged on iOS) and loads+shows ONE test ad, surfacing the coarse AdResult. NOT a
+        // real placement (that's ADS-2/4) — purely to verify the native seam end to end.
+        debugAdSection = if (AdsDebug.enabled) {
+            { DebugAdTrigger(adProvider) }
+        } else {
+            null
+        },
     )
+}
+
+/**
+ * ADS-0 — the debug spike trigger: a button that loads + shows one Google-TEST ad through the
+ * injected [adProvider] and shows the resulting [com.fuse.ads.AdResult]. Behind a flag, never wired
+ * into the game. Kept here (not in the presentational screen) so UI tests stay Koin-free.
+ */
+@Composable
+private fun DebugAdTrigger(adProvider: AdProvider) {
+    val c = FuseTheme.colors
+    val shape = FuseTheme.shapes.card
+    val scope = rememberCoroutineScope()
+    var status by remember { mutableStateOf("idle") }
+    var inFlight by remember { mutableStateOf(false) }
+
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(shape)
+            .background(c.card)
+            .border(1.dp, c.line, shape)
+            .padding(horizontal = 20.dp, vertical = 14.dp)
+            .testTag(SettingsScreenTags.DEBUG_AD_ROW),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        Text(
+            text = "Debug · Ads spike (ADS-0)",
+            style = FuseTheme.type.headingM.copy(color = c.text),
+        )
+        Text(
+            text = "Result: $status",
+            style = FuseTheme.type.bodyM.copy(color = c.sub),
+            modifier = Modifier.testTag(SettingsScreenTags.DEBUG_AD_RESULT),
+        )
+        TextButton(
+            onClick = {
+                if (inFlight) return@TextButton
+                inFlight = true
+                status = "loading…"
+                scope.launch {
+                    val result = adProvider.showRewardedTestAd()
+                    status = result.name
+                    inFlight = false
+                }
+            },
+            modifier = Modifier.testTag(SettingsScreenTags.DEBUG_AD_BUTTON),
+        ) {
+            Text("Show test ad", style = FuseTheme.type.headingM.copy(color = c.accent))
+        }
+    }
 }
 
 /**
@@ -109,6 +177,7 @@ fun SettingsScreen(
     onToggleColorblind: (Boolean) -> Unit,
     onBack: () -> Unit,
     modifier: Modifier = Modifier,
+    debugAdSection: (@Composable () -> Unit)? = null,
 ) {
     val c = FuseTheme.colors
     Column(
@@ -178,6 +247,10 @@ fun SettingsScreen(
                 rowTag = SettingsScreenTags.COLORBLIND_ROW,
                 switchTag = SettingsScreenTags.COLORBLIND_SWITCH,
             )
+
+            // ADS-0 (Sprint 8 spike) — optional debug ad trigger, supplied only by the stateful
+            // wrapper when AdsDebug.enabled. Null in tests/previews, so the screen stays Koin-free.
+            debugAdSection?.invoke()
         }
     }
 }
@@ -239,4 +312,9 @@ object SettingsScreenTags {
     const val REDUCED_MOTION_SWITCH: String = "settings_reduced_motion_switch"
     const val COLORBLIND_ROW: String = "settings_colorblind_row"
     const val COLORBLIND_SWITCH: String = "settings_colorblind_switch"
+
+    // ADS-0 (Sprint 8 spike) — debug ad trigger tags.
+    const val DEBUG_AD_ROW: String = "settings_debug_ad_row"
+    const val DEBUG_AD_BUTTON: String = "settings_debug_ad_button"
+    const val DEBUG_AD_RESULT: String = "settings_debug_ad_result"
 }

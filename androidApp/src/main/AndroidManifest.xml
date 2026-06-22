@@ -9,6 +9,15 @@
         android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
         android:theme="@style/Theme.Fuse">
+
+        <!-- ADS-0 (Sprint 8 spike): Google Mobile Ads (AdMob) App ID. This is Google's PUBLIC
+             SAMPLE App ID — it serves only test ads and is safe to commit. The REAL AdMob App ID
+             is a release-time secret injected later from a gitignored config (NOT committed). The
+             SDK reads this <meta-data> at MobileAds.initialize(); omitting it crashes the SDK. -->
+        <meta-data
+            android:name="com.google.android.gms.ads.APPLICATION_ID"
+            android:value="ca-app-pub-3940256099942544~3347511713" />
+
         <activity
             android:name=".MainActivity"
             android:exported="true"

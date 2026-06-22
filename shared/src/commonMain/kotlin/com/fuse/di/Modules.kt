@@ -13,6 +13,7 @@ import com.fuse.data.SettingsDailyRepository
 import com.fuse.data.SettingsDailyStreakRepository
 import com.fuse.data.SettingsGameRepository
 import com.fuse.data.platformSettingsModule
+import com.fuse.ads.platformAdsModule
 import com.fuse.daily.DailyClock
 import com.fuse.daily.SystemDailyClock
 import com.fuse.daily.platformSharerModule
@@ -196,6 +197,10 @@ val appModules: List<Module> = listOf(
     // DLY-7 — the native share seam (ACTION_SEND chooser / UIActivityViewController). The
     // Daily solved overlay resolves [com.fuse.daily.Sharer] from here to share the result card.
     platformSharerModule,
+    // ADS-0 (Sprint 8 spike) — the native ad seam (AdProvider expect/actual). Settings' debug
+    // "Show test ad" trigger resolves [com.fuse.ads.AdProvider] from here to load+show ONE
+    // Google-TEST rewarded ad. Behind a flag; not wired into any real placement (that's ADS-2/4).
+    platformAdsModule,
     dataModule,
     domainModule,
     presentationModule,
