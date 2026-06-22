@@ -18,6 +18,7 @@ import com.fuse.presentation.DailyStreakStore
 import com.fuse.ui.home.rememberDailyCountdown
 import com.fuse.presentation.GameIntent
 import com.fuse.presentation.GameStore
+import com.fuse.ui.collection.CollectionScreen
 import com.fuse.ui.daily.DailyScreen
 import com.fuse.ui.game.GameScreen
 import com.fuse.ui.home.HomeScreen
@@ -192,6 +193,18 @@ private fun AppShell(
                 dailyCountdown = dailyCountdown,
                 onOpenDaily = { navController.navigate(FuseDestinations.DAILY) },
                 onOpenSettings = { navController.navigate(FuseDestinations.SETTINGS) },
+                // COS-3 — the cosmetics Collection entry point.
+                onOpenCollection = { navController.navigate(FuseDestinations.COLLECTION) },
+                modifier = Modifier.fillMaxSize(),
+            )
+        }
+        composable(FuseDestinations.COLLECTION) {
+            // COS-3 — browse cosmetics, see owned vs locked (unlock condition; no currency), and
+            // equip an owned one. The shared CosmeticsStore (Koin singleton) resolves the catalog +
+            // the live unlocked/equipped state; equipping restyles the board live (COS-2). Back
+            // pops to Home (system back on Android, the in-screen "‹ Home" on iOS — SHL-2 pattern).
+            CollectionScreen(
+                onBack = { navController.popBackStack() },
                 modifier = Modifier.fillMaxSize(),
             )
         }
