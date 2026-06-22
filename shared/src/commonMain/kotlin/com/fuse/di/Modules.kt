@@ -1,10 +1,14 @@
 package com.fuse.di
 
+import com.fuse.data.AchievementsRepository
+import com.fuse.data.CosmeticsRepository
 import com.fuse.data.DailyRepository
 import com.fuse.data.DailyStreakRepository
 import com.fuse.data.DefaultGreeting
 import com.fuse.data.GameRepository
 import com.fuse.data.Greeting
+import com.fuse.data.SettingsAchievementsRepository
+import com.fuse.data.SettingsCosmeticsRepository
 import com.fuse.data.SettingsDailyRepository
 import com.fuse.data.SettingsDailyStreakRepository
 import com.fuse.data.SettingsGameRepository
@@ -12,6 +16,8 @@ import com.fuse.data.platformSettingsModule
 import com.fuse.daily.DailyClock
 import com.fuse.daily.SystemDailyClock
 import com.fuse.daily.platformSharerModule
+import com.fuse.presentation.AchievementsStore
+import com.fuse.presentation.CosmeticsStore
 import com.fuse.presentation.DailyStore
 import com.fuse.presentation.DailyStreakStore
 import com.fuse.domain.GetGreetingUseCase
@@ -27,6 +33,9 @@ import com.fuse.feedback.platformHapticsModule
 import com.fuse.feedback.platformSoundModule
 import com.fuse.presentation.GameStore
 import com.fuse.presentation.SamplePresenter
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import org.koin.core.module.Module
 import org.koin.dsl.module
 
@@ -70,6 +79,12 @@ val dataModule: Module = module {
     // key (fuse.daily.streak — SEPARATE from the per-day puzzle slot fuse.daily.progress) so
     // the streak outlives every new-day reset of the in-progress puzzle.
     single<DailyStreakRepository> { SettingsDailyStreakRepository(get()) }
+    // COS-1: the player's earned ACHIEVEMENTS (e.g. reached 2048) — over the SAME platform
+    // `Settings`, under its OWN key (fuse.achievements). Drives cosmetic unlocking; no currency.
+    single<AchievementsRepository> { SettingsAchievementsRepository(get()) }
+    // COS-1: the player's EQUIPPED cosmetics (the only persisted cosmetics choice; owned is
+    // DERIVED from achievements). Own key (fuse.cosmetics.equipped).
+    single<CosmeticsRepository> { SettingsCosmeticsRepository(get()) }
 }
 
 /** Domain layer — use cases. Sample use case consuming the data abstraction. */
@@ -94,6 +109,22 @@ val presentationModule: Module = module {
     // collects [DailyStore]'s one-shot Solved effect and calls [DailyStreakStore.recordSolved],
     // so a solve records the streak exactly once (idempotent for the same day).
     single { DailyStreakStore(clock = get(), repository = get()) }
+    // COS-1: the ACHIEVEMENTS store — owns the persisted PlayerAchievements record and exposes
+    // it so the cosmetics layer can recompute unlocks live. `single` (one shared record).
+    // `GameScreen` collects GameStore's one-shot GameEffect.Won and calls markReached2048()
+    // (idempotent), mirroring how DailyScreen records the streak on DailyEffect.Solved.
+    single { AchievementsStore(repository = get()) }
+    // COS-1: the COSMETICS store — catalog + unlocked (derived from AchievementsStore) +
+    // equipped (persisted). `single`. It observes the achievements flow on a long-lived app
+    // scope so reaching 2048 unlocks the gated skin live; COS-2 reads equipped → theme override,
+    // COS-3 renders the collection + Equip.
+    single {
+        CosmeticsStore(
+            achievementsStore = get(),
+            repository = get(),
+            scope = CoroutineScope(SupervisorJob() + Dispatchers.Main),
+        )
+    }
 }
 
 /**

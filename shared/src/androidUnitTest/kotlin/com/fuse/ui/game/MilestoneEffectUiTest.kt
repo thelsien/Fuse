@@ -15,6 +15,7 @@ import com.fuse.feedback.NoOpHaptics
 import com.fuse.feedback.NoOpSound
 import com.fuse.feedback.SoundCoordinator
 import com.fuse.feedback.SoundSettings
+import com.fuse.presentation.AchievementsStore
 import com.fuse.presentation.GameStore
 import com.fuse.ui.theme.FuseTheme
 import org.junit.Test
@@ -69,7 +70,7 @@ class MilestoneEffectUiTest {
         val store = GameStore.forState(stateFromBoard(nearMilestoneBoard()))
         mainClock.autoAdvance = false
         setContent {
-            FuseTheme { GameScreen(store = store, haptics = testHaptics(), sound = testSound()) }
+            FuseTheme { GameScreen(store = store, haptics = testHaptics(), sound = testSound(), achievements = AchievementsStore()) }
         }
 
         // No milestone yet — the effect overlay is absent.
@@ -95,7 +96,7 @@ class MilestoneEffectUiTest {
         setContent {
             // Reduced motion active: the milestone burst/flash must NOT appear at all (hard AC).
             FuseTheme(reducedMotion = true) {
-                GameScreen(store = store, haptics = testHaptics(), sound = testSound())
+                GameScreen(store = store, haptics = testHaptics(), sound = testSound(), achievements = AchievementsStore())
             }
         }
 
@@ -130,7 +131,7 @@ class MilestoneEffectUiTest {
         )
         mainClock.autoAdvance = false
         setContent {
-            FuseTheme { GameScreen(store = store, haptics = testHaptics(), sound = testSound()) }
+            FuseTheme { GameScreen(store = store, haptics = testHaptics(), sound = testSound(), achievements = AchievementsStore()) }
         }
 
         onNodeWithTag(GameScreenTags.BOARD).performTouchInput { swipeLeft() }

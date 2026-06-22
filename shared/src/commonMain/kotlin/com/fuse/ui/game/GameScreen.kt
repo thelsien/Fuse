@@ -27,6 +27,7 @@ import com.fuse.feedback.SoundCoordinator
 import com.fuse.feedback.comboCount
 import com.fuse.feedback.isCombo
 import com.fuse.feedback.milestoneReached
+import com.fuse.presentation.AchievementsStore
 import com.fuse.presentation.GameEffect
 import com.fuse.presentation.GameIntent
 import com.fuse.presentation.GameStore
@@ -69,6 +70,7 @@ fun GameScreen(
     store: GameStore = koinInject(),
     haptics: HapticsCoordinator = koinInject(),
     sound: SoundCoordinator = koinInject(),
+    achievements: AchievementsStore = koinInject(),
     onBack: (() -> Unit)? = null,
 ) {
     val state by store.state.collectAsState()
@@ -99,7 +101,7 @@ fun GameScreen(
     // non-replaying `effects` flow so each cue fires exactly once per move and is never
     // re-triggered by recomposition. (Real audio/haptics only on a physical device;
     // emulators/simulators run this harmlessly — no crash, often no audible output.)
-    LaunchedEffect(store, haptics, sound) {
+    LaunchedEffect(store, haptics, sound, achievements) {
         store.effects.collect { effect ->
             when (effect) {
                 is GameEffect.Moved -> {
@@ -126,7 +128,13 @@ fun GameScreen(
                     }
                 }
                 GameEffect.Blocked -> haptics.onBlocked()
-                GameEffect.Won -> Unit
+                // COS-1 — record the "reached 2048" achievement on the FIRST win, exactly once.
+                // Mirrors DailyScreen recording the streak on DailyEffect.Solved: the one-shot
+                // GameEffect.Won fires only on the move that first reaches the target, and
+                // markReached2048() is idempotent, so this can't double-set. Reaching 2048
+                // auto-unlocks the gated cosmetic (no purchase) via AchievementsStore.state,
+                // which CosmeticsStore observes.
+                GameEffect.Won -> achievements.markReached2048()
             }
         }
     }

@@ -18,6 +18,7 @@ import com.fuse.feedback.NoOpHaptics
 import com.fuse.feedback.NoOpSound
 import com.fuse.feedback.SoundCoordinator
 import com.fuse.feedback.SoundSettings
+import com.fuse.presentation.AchievementsStore
 import com.fuse.presentation.GameStore
 import com.fuse.ui.theme.FuseTheme
 import org.junit.Assert.assertTrue
@@ -97,7 +98,7 @@ class GameOverlaysUiTest {
                 score = Score(current = 1234L, best = 1234L),
             ),
         )
-        setContent { FuseTheme { GameScreen(store = store, haptics = testHaptics(), sound = testSound()) } }
+        setContent { FuseTheme { GameScreen(store = store, haptics = testHaptics(), sound = testSound(), achievements = AchievementsStore()) } }
 
         // Lose overlay is up with the final score; best preserved.
         onNodeWithTag(GameOverlayTags.LOSE_ROOT).assertExists()
@@ -119,7 +120,7 @@ class GameOverlaysUiTest {
     @Test
     fun winOverlayShowsOnceAndKeepGoingContinuesPlay() = runComposeUiTest {
         val store = GameStore.forState(stateFromBoard(nearWinBoard()))
-        setContent { FuseTheme { GameScreen(store = store, haptics = testHaptics(), sound = testSound()) } }
+        setContent { FuseTheme { GameScreen(store = store, haptics = testHaptics(), sound = testSound(), achievements = AchievementsStore()) } }
 
         // Not won yet.
         onNodeWithTag(GameOverlayTags.WIN_ROOT).assertDoesNotExist()
@@ -157,7 +158,7 @@ class GameOverlaysUiTest {
     @Test
     fun winOverlayRestartStartsNewGame() = runComposeUiTest {
         val store = GameStore.forState(stateFromBoard(nearWinBoard()))
-        setContent { FuseTheme { GameScreen(store = store, haptics = testHaptics(), sound = testSound()) } }
+        setContent { FuseTheme { GameScreen(store = store, haptics = testHaptics(), sound = testSound(), achievements = AchievementsStore()) } }
 
         onNodeWithTag(GameScreenTags.BOARD).performTouchInput { swipeLeft() }
         waitForIdle()
