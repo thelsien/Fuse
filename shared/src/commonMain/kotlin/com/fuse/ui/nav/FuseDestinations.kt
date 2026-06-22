@@ -22,4 +22,7 @@ object FuseDestinations {
 
     /** DLY-4 — the playable Daily Challenge ([com.fuse.ui.daily.DailyScreen]). */
     const val DAILY: String = "daily"
+
+    /** COS-3 — the cosmetics Collection screen ([com.fuse.ui.collection.CollectionScreen]). */
+    const val COLLECTION: String = "collection"
 }

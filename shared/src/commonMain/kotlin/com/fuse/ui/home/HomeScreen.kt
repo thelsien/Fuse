@@ -68,6 +68,8 @@ import com.fuse.ui.theme.FuseTheme
  *   there is NO resumable game — i.e. [canResume] is `false`). Starts a fresh game.
  * @param onOpenDaily invoked when the player taps **Daily** (placeholder for Sprint 5).
  * @param onOpenSettings invoked when the player taps **Settings** (SHL-3 wires the real screen).
+ * @param onOpenCollection COS-3 — invoked when the player taps **Collection** (the cosmetics
+ *   browse/equip screen). Defaults to a no-op so existing callers/tests compile unchanged.
  * @param modifier outer modifier.
  * @param dailyEnabled whether the Daily entry point is active; defaults to `false` (placeholder).
  * @param dailyStreak DLY-5 — the LIVE current daily streak (0 when none/broken). When the Daily
@@ -92,6 +94,7 @@ fun HomeScreen(
     onOpenDaily: () -> Unit,
     onOpenSettings: () -> Unit,
     modifier: Modifier = Modifier,
+    onOpenCollection: () -> Unit = {},
     dailyEnabled: Boolean = false,
     dailyStreak: Int = 0,
     dailyCountdown: String? = null,
@@ -196,6 +199,11 @@ fun HomeScreen(
                             .testTag(HomeScreenTags.DAILY_COUNTDOWN),
                     )
                 }
+                OutlineButton(
+                    label = "Collection",
+                    onClick = onOpenCollection,
+                    tag = HomeScreenTags.COLLECTION,
+                )
                 OutlineButton(
                     label = "Settings",
                     onClick = onOpenSettings,
@@ -343,5 +351,8 @@ object HomeScreenTags {
 
     /** DLY-6 — the live "Resets in HH:MM:SS" countdown caption beneath the Daily entry. */
     const val DAILY_COUNTDOWN: String = "home_daily_countdown"
+
+    /** COS-3 — the Collection (cosmetics) entry point. */
+    const val COLLECTION: String = "home_collection"
     const val SETTINGS: String = "home_settings"
 }

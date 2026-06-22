@@ -159,6 +159,17 @@ object Cosmetics {
 
     /** Looks up a cosmetic by [id], or `null` if no catalog entry has it. */
     fun byId(id: String): Cosmetic? = all.firstOrNull { it.id == id }
+
+    /**
+     * COS-3 — the catalog grouped by [CosmeticType] for the collection screen's sections, in a
+     * STABLE display order: TILE_SKIN first, then BOARD_THEME, and within each group the catalog's
+     * own [all] order (default entry first). Pure (no Compose) so the grouping is unit-testable.
+     * Only types that actually have entries appear (so an empty group never renders a header).
+     */
+    fun grouped(): List<Pair<CosmeticType, List<Cosmetic>>> =
+        listOf(CosmeticType.TILE_SKIN, CosmeticType.BOARD_THEME)
+            .map { type -> type to all.filter { it.type == type } }
+            .filter { (_, items) -> items.isNotEmpty() }
 }
 
 /**
