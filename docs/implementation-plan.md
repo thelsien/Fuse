@@ -21,7 +21,7 @@ Agile build plan · Kotlin Multiplatform + Compose Multiplatform · solo develop
 | Team | Solo | Stories sized small (mostly 1–3 pts); sequential sprints; one vertical slice at a time |
 | Scope | MVP v1.0 | Powerups, gems, board variants, leaderboards, season pass, modes beyond Classic+Daily are **out** |
 | Backend | Local-only | No cloud save, no remote config, no server validation in v1.0 — all deferred to fast-follow |
-| Daily Challenge | Client-seeded from date | Deterministic; no server needed; everyone gets the same board for a given UTC day |
+| Daily Challenge | Seeded **no-spawn puzzle**, client-derived from the UTC date | Deterministic; no server. Same seed → same start board for everyone on a given UTC day; **reach a per-day target tile in the fewest moves** (no random spawns). Solver computes "par". One-shot until solved; free undo/restart; own save slot. **Reworked from the original "endless seeded run" — see Sprint 5.** |
 | Economy | Single soft currency (Coins) | Earned by play/daily/streaks/rewarded ads; spent on cosmetics. No gems, no powerups |
 | Ads | AdMob (or mediation) via `expect/actual` | Rewarded (revive / coins / double-daily) + capped interstitial. **Riskiest native work** |
 | IAP | Remove Ads (anchor) | Wrap Play Billing / StoreKit, or use RevenueCat to abstract both. Restore-purchases required |
@@ -79,7 +79,7 @@ Agile build plan · Kotlin Multiplatform + Compose Multiplatform · solo develop
 | E2 | Board UI & input | Playable Classic board (**First Playable**) | Med |
 | E3 | Game feel | Animations, haptics, sound, milestones | Med |
 | E4 | App shell & settings | Home, nav, settings, resume-on-launch | Low |
-| E5 | Daily Challenge | Seeded daily + shareable result | Med |
+| E5 | Daily Challenge | Seeded daily **puzzle** (no-spawn, fewest-moves) + streak + shareable result | Med |
 | E6 | Retention economy | Coins, daily reward, streaks, notifications | Med |
 | E7 | Cosmetics | Themes/skins + collection screen | Low |
 | E8 | Ads | Rewarded + interstitial (native wrap) | **High** |
@@ -180,19 +180,35 @@ Agile build plan · Kotlin Multiplatform + Compose Multiplatform · solo develop
 - **`SHL-4` Resume-on-launch UX — `1`**
   AC: launching with a saved game offers Resume vs New.
 
-### Sprint 5 — Daily Challenge
+### Sprint 5 — Daily Challenge ✅ *(DONE — as-built; reworked from the original design)*
 *Goal: the daily habit + viral share loop.*
 
-- **`DLY-1` Date→seed — `2`**
-  AC: pure function maps a UTC day to a seed; same day → same seed everywhere; tested across timezones/day boundaries.
-- **`DLY-2` Daily mode — `2`**
-  AC: Daily run starts from the day's seeded board; one attempt tracked per day.
-- **`DLY-3` Daily completion + streak — `3`**
-  AC: completion recorded locally; current/longest daily streak maintained; rolls correctly across midnight; missed day breaks streak.
-- **`DLY-4` Reset countdown — `1`**
-  AC: Home shows time until next Daily; updates live.
-- **`DLY-5` Shareable result card — `3`** *(Sharer expect/actual)*
-  AC: generates an emoji/mini-grid result ("Fuse Daily #N · best tile · moves") + opens native share sheet; no PII; copy-paste friendly.
+> **Design change (agreed with product, mid-sprint):** the Daily is **not** an endless seeded run scored by best-tile/score. It is a **deterministic puzzle**: every player gets the **same seed-derived START board** on a given UTC day and must **reach a per-day TARGET tile in the fewest moves**. There are **no random spawns** (only the preset tiles slide/merge), so the board is bounded and a **solver computes the optimal move count ("par")**. The shared start board is what makes results comparable/shareable (the Wordle insight, applied to a puzzle). This reframe is *more* differentiated from Classic than an endless run.
+>
+> **Rules as built:**
+> - **No-spawn puzzle**, 4×4. Win = a tile reaches the day's target. The target **varies per day** (seed-derived, currently weighted over {32, 64, 128, 256}); difficulty is solver-banded (par 3–10).
+> - **One-shot until solved:** **free undo (one move) and restart (to the start board)** while playing; the recorded result is the **move count of the run in which you reach the target**; once solved it locks until tomorrow.
+> - **Single daily save slot** (NOT keyed per-date): holds the day it belongs to + the in-progress move list; **resets when a new UTC day starts**, **write-through after each move** so you resume exactly. Separate from the Classic save blob and from the streak record.
+> - **UTC day boundary.** Local-only: trusts the device clock (server-side replay validation is fast-follow). The engine's seed+move-list replayability (`ENG-9`) keeps the door open for that.
+
+Implemented as **DLY-1…DLY-7** (the solver and generator are genuinely new engine work, so each got its own story):
+
+- **`DLY-1` Date → seed + day number — `2`**
+  AC: pure `dateToSeed(LocalDate): Long` + `dailyDayNumber(date)` ("Daily #N"); same UTC day → same seed everywhere (golden cross-platform tests); tested across timezones/day boundaries. Adds kotlinx-datetime + an injectable `DailyClock`.
+- **`DLY-2` No-spawn puzzle step + solver — `3`**
+  AC: a no-spawn move step (`Board.puzzleStep`, slide+merge, no new tile); a BFS **solver** (`solve(board, target)`) that returns solvability + minimum moves (**par**) + an optimal path; value-canonical (ignores tile ids), bounded. Pure, fully unit-tested.
+- **`DLY-3` Daily puzzle generator — `2`**
+  AC: deterministic `generateDailyPuzzle(seed)` → a **solvable** start board + per-day target + par, within a difficulty band; same seed → same puzzle on every platform (golden); guaranteed solvable + terminating (sweeps: 100% solvable in band).
+- **`DLY-4` Daily mode (play + single save slot) — `3`**
+  AC: playable `DailyStore`/`DailyScreen` — renders the day's start board, no-spawn moves, move counter, win-on-target, **undo/restart**; the **single save slot** (new-day reset + write-through, resume mid-run, one-shot lock after solve); Home's Daily entry enabled + `DAILY` route. Emits a one-shot `Solved(dayNumber, moves)` signal.
+- **`DLY-5` Completion + streak — `2`**
+  AC: solving is recorded; **current + longest** daily streak maintained (pure `recordCompletion`/`liveCurrent`), persisted in a **separate** slot (`fuse.daily.streak`); rolls across the UTC boundary; a **missed day breaks** the streak; shown on the solved overlay + Home.
+- **`DLY-6` Reset countdown — `1`**
+  AC: Home shows a **live** countdown to the next Daily (next UTC midnight), ticking each second; pure duration/format helpers + a `now()` clock seam.
+- **`DLY-7` Shareable result card — `3`** *(Sharer expect/actual)*
+  AC: pure `buildDailyShareCard(...)` → an **emoji mini-grid** of the shared start board + a result line ("Fuse Daily #N · 🎯 target · solved in M moves (par P)") + optional streak; opens the native share sheet via a `Sharer` `expect/actual` (Android `ACTION_SEND` / iOS `UIActivityViewController`); **no PII**, copy-paste friendly, local-only (no share analytics).
+
+> **As-built notes:** 511 tests green on Android + iOS Native at sprint close (`main` @ `de20386`). The whole daily pipeline (seed → generate → solve → play → streak → share) is deterministic and golden-tested across both platforms.
 
 ### Sprint 6 — Retention economy
 *Goal: reasons to come back.*
