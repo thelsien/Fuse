@@ -18,6 +18,7 @@ import com.fuse.feedback.NoOpHaptics
 import com.fuse.feedback.NoOpSound
 import com.fuse.feedback.SoundCoordinator
 import com.fuse.feedback.SoundSettings
+import com.fuse.presentation.AchievementsStore
 import com.fuse.presentation.GameStore
 import com.fuse.ui.theme.FuseTheme
 import org.junit.Test
@@ -43,6 +44,9 @@ class GameScreenUiTest {
     /** FEL-5 — a Koin-free sound coordinator (NoOp sound) so the UI tests need no Koin. */
     private fun testSound(): SoundCoordinator =
         SoundCoordinator(NoOpSound, SoundSettings())
+
+    /** COS-1 — a Koin-free achievements store (NoOp repo) so the UI tests need no Koin. */
+    private fun testAchievements(): AchievementsStore = AchievementsStore()
 
     private fun stateFromBoard(board: Board): GameState = GameState(
         board = board,
@@ -71,7 +75,14 @@ class GameScreenUiTest {
         )
 
         setContent {
-            FuseTheme { GameScreen(store = store, haptics = testHaptics(), sound = testSound()) }
+            FuseTheme {
+                GameScreen(
+                    store = store,
+                    haptics = testHaptics(),
+                    sound = testSound(),
+                    achievements = testAchievements(),
+                )
+            }
         }
 
         // Before: two 2-tiles, score 0.
@@ -103,7 +114,14 @@ class GameScreenUiTest {
         )
 
         setContent {
-            FuseTheme { GameScreen(store = store, haptics = testHaptics(), sound = testSound()) }
+            FuseTheme {
+                GameScreen(
+                    store = store,
+                    haptics = testHaptics(),
+                    sound = testSound(),
+                    achievements = testAchievements(),
+                )
+            }
         }
 
         onNodeWithTag(ScoreHudTags.SCORE_VALUE).assertTextEquals("0")
@@ -133,7 +151,14 @@ class GameScreenUiTest {
             ),
         )
         setContent {
-            FuseTheme { GameScreen(store = store, haptics = testHaptics(), sound = testSound()) }
+            FuseTheme {
+                GameScreen(
+                    store = store,
+                    haptics = testHaptics(),
+                    sound = testSound(),
+                    achievements = testAchievements(),
+                )
+            }
         }
 
         onNodeWithTag(GameScreenTags.BOARD).performTouchInput { swipeLeft() }

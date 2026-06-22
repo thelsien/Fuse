@@ -16,6 +16,7 @@ import com.fuse.feedback.NoOpSound
 import com.fuse.feedback.ReducedMotionSettings
 import com.fuse.feedback.SoundCoordinator
 import com.fuse.feedback.SoundSettings
+import com.fuse.presentation.AchievementsStore
 import com.fuse.presentation.GameStore
 import com.fuse.ui.theme.FuseTheme
 import org.junit.Test
@@ -87,7 +88,7 @@ class ReducedMotionSwitchUiTest {
         setContent {
             // Exactly App()'s wiring: the SETTING drives FuseTheme(reducedMotion = …).
             FuseTheme(reducedMotion = settings.reducedMotionEnabled) {
-                GameScreen(store = store, haptics = testHaptics(), sound = testSound())
+                GameScreen(store = store, haptics = testHaptics(), sound = testSound(), achievements = AchievementsStore())
             }
         }
 
@@ -112,7 +113,7 @@ class ReducedMotionSwitchUiTest {
         mainClock.autoAdvance = false
         setContent {
             FuseTheme(reducedMotion = settings.reducedMotionEnabled) {
-                GameScreen(store = store, haptics = testHaptics(), sound = testSound())
+                GameScreen(store = store, haptics = testHaptics(), sound = testSound(), achievements = AchievementsStore())
             }
         }
 
@@ -131,7 +132,7 @@ class ReducedMotionSwitchUiTest {
         mainClock.autoAdvance = false
         setContent {
             FuseTheme(reducedMotion = settings.reducedMotionEnabled) {
-                GameScreen(store = store, haptics = testHaptics(), sound = testSound())
+                GameScreen(store = store, haptics = testHaptics(), sound = testSound(), achievements = AchievementsStore())
             }
         }
 
@@ -155,7 +156,7 @@ class ReducedMotionSwitchUiTest {
         mainClock.autoAdvance = false
         setContent {
             FuseTheme(reducedMotion = settings.reducedMotionEnabled) {
-                GameScreen(store = store, haptics = testHaptics(), sound = testSound())
+                GameScreen(store = store, haptics = testHaptics(), sound = testSound(), achievements = AchievementsStore())
             }
         }
 

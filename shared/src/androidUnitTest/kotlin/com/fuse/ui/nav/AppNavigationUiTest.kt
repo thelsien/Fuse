@@ -26,6 +26,7 @@ import com.fuse.feedback.NoOpHaptics
 import com.fuse.feedback.NoOpSound
 import com.fuse.feedback.SoundCoordinator
 import com.fuse.feedback.SoundSettings
+import com.fuse.presentation.AchievementsStore
 import com.fuse.presentation.GameIntent
 import com.fuse.presentation.GameStore
 import com.fuse.ui.game.GameScreen
@@ -130,6 +131,7 @@ class AppNavigationUiTest {
                     store = store,
                     haptics = testHaptics(),
                     sound = testSound(),
+                    achievements = AchievementsStore(),
                     onBack = { navController.popBackStack() },
                 )
             }

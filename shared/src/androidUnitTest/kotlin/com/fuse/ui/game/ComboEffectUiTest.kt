@@ -16,6 +16,7 @@ import com.fuse.feedback.NoOpHaptics
 import com.fuse.feedback.NoOpSound
 import com.fuse.feedback.SoundCoordinator
 import com.fuse.feedback.SoundSettings
+import com.fuse.presentation.AchievementsStore
 import com.fuse.presentation.GameStore
 import com.fuse.ui.theme.FuseTheme
 import org.junit.Test
@@ -81,7 +82,7 @@ class ComboEffectUiTest {
         val store = GameStore.forState(stateFromBoard(comboBoard()))
         mainClock.autoAdvance = false
         setContent {
-            FuseTheme { GameScreen(store = store, haptics = testHaptics(), sound = testSound()) }
+            FuseTheme { GameScreen(store = store, haptics = testHaptics(), sound = testSound(), achievements = AchievementsStore()) }
         }
 
         // No combo yet — the badge is absent.
@@ -108,7 +109,7 @@ class ComboEffectUiTest {
         setContent {
             // Reduced motion active: the combo badge must NOT appear at all (hard AC).
             FuseTheme(reducedMotion = true) {
-                GameScreen(store = store, haptics = testHaptics(), sound = testSound())
+                GameScreen(store = store, haptics = testHaptics(), sound = testSound(), achievements = AchievementsStore())
             }
         }
 
@@ -132,7 +133,7 @@ class ComboEffectUiTest {
         val store = GameStore.forState(stateFromBoard(singleMergeBoard()))
         mainClock.autoAdvance = false
         setContent {
-            FuseTheme { GameScreen(store = store, haptics = testHaptics(), sound = testSound()) }
+            FuseTheme { GameScreen(store = store, haptics = testHaptics(), sound = testSound(), achievements = AchievementsStore()) }
         }
 
         onNodeWithTag(GameScreenTags.BOARD).performTouchInput { swipeLeft() }
