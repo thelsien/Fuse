@@ -2,13 +2,9 @@ import Foundation
 import UIKit
 import Shared
 // ⚠️ Requires the GoogleMobileAds Swift Package added to the iosApp target (see docs/ads/ADS-0-gotchas.md).
-// Until the package is added this file will NOT compile (the `import GoogleMobileAds` below is
-// unresolved), so it is NOT yet a member of the iosApp Xcode target. Add the package, THEN add this
-// file to the target (it is already on disk next to ContentView.swift), and call
-// `AdsBridge.register()` from `iOSApp.init()` — see the doc.
 import GoogleMobileAds
 
-/// ADS-0 (iOS) — the Swift side of the AdProvider seam.
+/// ADS-1 (iOS) — the Swift side of the generalized AdProvider seam.
 ///
 /// The Kotlin `:shared` framework defines `IosAdProviderBridge` (an Obj-C protocol) and the
 /// process-wide `IosAds` registration point (see `AdProvider.ios.kt`). This class implements the
@@ -16,15 +12,14 @@ import GoogleMobileAds
 /// Xcode app, not of the Kotlin framework) and registers itself so the Kotlin `IosAdProvider`
 /// resolved from Koin delegates here.
 ///
-/// It loads + presents ONE Google-**test** rewarded ad from the top view controller and reports a
-/// coarse result string ("Shown"/"Rewarded"/"Dismissed"/"NoFill"/"Failed") that Kotlin maps to
-/// `AdResult`. Behind the spike's debug trigger — not a real placement.
+/// It supports BOTH formats — rewarded AND interstitial — with separate load/isReady/show, using
+/// Google's PUBLIC **test** units (from the Kotlin `AdUnitIds`). Result strings
+/// ("Rewarded"/"Dismissed"/"Completed"/"NoFill"/"NotReady"/"Failed") map to Kotlin `AdResult`.
+/// Behind the spike's debug trigger — not a real placement.
 final class AdsBridge: NSObject, IosAdProviderBridge {
 
-    /// Google's PUBLIC test rewarded ad unit (iOS). Serves only test ads — safe to commit.
-    private static let testRewardedUnitId = "ca-app-pub-3940256099942544/1712485313"
-
     private var rewardedAd: RewardedAd?
+    private var interstitialAd: InterstitialAd?
     private var fullScreenDelegate: FullScreenDelegate?
 
     /// Call once at app launch (e.g. from `iOSApp.init()`), before the first Compose view controller.
@@ -37,30 +32,52 @@ final class AdsBridge: NSObject, IosAdProviderBridge {
         MobileAds.shared.start(completionHandler: nil)
     }
 
-    func showRewardedTestAd(onResult: @escaping (String) -> Void) {
+    func load(format: String, onLoaded: @escaping (KotlinBoolean) -> Void) {
         initialize()
         let request = Request()
-        RewardedAd.load(with: Self.testRewardedUnitId, request: request) { [weak self] ad, error in
-            guard let self = self else { onResult("Failed"); return }
-            if let error = error as NSError? {
-                // GADErrorCode.noFill == 1 in the GoogleMobileAds error domain.
-                onResult(error.code == 1 ? "NoFill" : "Failed")
-                return
+        if format == AdFormat.rewarded.name {
+            RewardedAd.load(with: AdUnitIds.shared.IOS_REWARDED, request: request) { [weak self] ad, error in
+                guard let self = self, error == nil, let ad = ad else { onLoaded(false); return }
+                self.rewardedAd = ad
+                onLoaded(true)
             }
-            guard let ad = ad,
-                  let root = Self.topViewController() else {
-                onResult("Failed")
-                return
+        } else {
+            InterstitialAd.load(with: AdUnitIds.shared.IOS_INTERSTITIAL, request: request) { [weak self] ad, error in
+                guard let self = self, error == nil, let ad = ad else { onLoaded(false); return }
+                self.interstitialAd = ad
+                onLoaded(true)
             }
-            self.rewardedAd = ad
+        }
+    }
+
+    func isReady(format_ format: String) -> Bool {
+        if format == AdFormat.rewarded.name { return rewardedAd != nil }
+        return interstitialAd != nil
+    }
+
+    func show(format: String, onResult: @escaping (String) -> Void) {
+        guard let root = Self.topViewController() else { onResult("Failed"); return }
+        if format == AdFormat.rewarded.name {
+            guard let ad = rewardedAd else { onResult("NotReady"); return }
+            rewardedAd = nil
             var rewarded = false
             let delegate = FullScreenDelegate(
                 onDismiss: { onResult(rewarded ? "Rewarded" : "Dismissed") },
                 onFailed: { onResult("Failed") }
             )
-            self.fullScreenDelegate = delegate
+            fullScreenDelegate = delegate
             ad.fullScreenContentDelegate = delegate
             ad.present(from: root) { rewarded = true }
+        } else {
+            guard let ad = interstitialAd else { onResult("NotReady"); return }
+            interstitialAd = nil
+            let delegate = FullScreenDelegate(
+                onDismiss: { onResult("Completed") },
+                onFailed: { onResult("Failed") }
+            )
+            fullScreenDelegate = delegate
+            ad.fullScreenContentDelegate = delegate
+            ad.present(from: root)
         }
     }
 
@@ -79,7 +96,7 @@ final class AdsBridge: NSObject, IosAdProviderBridge {
     }
 }
 
-/// Bridges the full-screen content callbacks to the simple closures the spike needs.
+/// Bridges the full-screen content callbacks to the simple closures the bridge needs.
 private final class FullScreenDelegate: NSObject, FullScreenContentDelegate {
     private let onDismiss: () -> Void
     private let onFailed: () -> Void
