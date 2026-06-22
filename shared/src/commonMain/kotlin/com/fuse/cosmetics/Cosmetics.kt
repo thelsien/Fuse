@@ -76,9 +76,10 @@ data class Cosmetic(
  * COS-1 — the static cosmetics catalog (registry).
  *
  * Holds the two always-on DEFAULT entries (one per [CosmeticType], [UnlockRule.Free], always
- * owned + equippable), at least one ACHIEVEMENT-gated entry (the 2048-reward tile skin), plus
- * a couple of free placeholders. The actual colors are COS-4; here every entry only references
- * a [Cosmetic.styleId] hook.
+ * owned + equippable), one ACHIEVEMENT-gated entry (the 2048-reward `goldRush` tile skin), plus
+ * the free starter set (`midnight` tile skin, `ocean` + `sunset` board themes). COS-4 fills the
+ * real art behind each non-default [Cosmetic.styleId] in `CosmeticStyles`; this catalog only
+ * references the stable styleId hooks (ids/types/unlock are stable — never renamed).
  */
 object Cosmetics {
     /** The id of the default TILE_SKIN — the app's current tile ramp; always owned/equipped. */
@@ -133,13 +134,22 @@ object Cosmetics {
         styleId = "midnight",
     )
 
-    /** A free placeholder board theme (art is COS-4). */
+    /** A free deep-teal "ocean" board theme (real art in COS-4). */
     val OceanBoardTheme: Cosmetic = Cosmetic(
         id = "board.ocean",
         name = "Ocean",
         type = CosmeticType.BOARD_THEME,
         unlock = UnlockRule.Free,
         styleId = "ocean",
+    )
+
+    /** A free warm "sunset" dusk board theme — the COS-4 rounding-out 4th starter. */
+    val SunsetBoardTheme: Cosmetic = Cosmetic(
+        id = "board.sunset",
+        name = "Sunset",
+        type = CosmeticType.BOARD_THEME,
+        unlock = UnlockRule.Free,
+        styleId = "sunset",
     )
 
     /** The whole catalog, in display order. The first of each type is its DEFAULT. */
@@ -149,6 +159,7 @@ object Cosmetics {
         GoldRushTileSkin,
         DefaultBoardTheme,
         OceanBoardTheme,
+        SunsetBoardTheme,
     )
 
     /** The default cosmetic for a [type] — its always-owned, equip-fallback entry. */
