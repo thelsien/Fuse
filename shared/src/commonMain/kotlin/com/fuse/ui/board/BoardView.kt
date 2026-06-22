@@ -31,7 +31,7 @@ import com.fuse.engine.Board
 import com.fuse.engine.Tile
 import com.fuse.ui.theme.FuseMotion
 import com.fuse.ui.theme.FuseTheme
-import com.fuse.ui.theme.TileRamp
+import com.fuse.ui.theme.TileRampStyle
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
@@ -59,9 +59,13 @@ import kotlinx.coroutines.launch
  *
  * ## Colors / numerals (from tokens only — no literal hex)
  * The board background uses [FuseTheme.colors] `boardBg`; empty cells use `card2`.
- * Each occupied cell is filled with [TileRamp.forValue]`(value).bg` and its numeral
- * is drawn in `.fg`, with corner radius from the shape tokens. The numeral is scaled
- * down for longer numbers ([tileFontSizeSp]) so 4-digit tiles stay readable.
+ * Each occupied cell is filled with the THEME-PROVIDED tile ramp (`FuseTheme.tiles.forValue(value).bg`)
+ * and its numeral is drawn in `.fg`, with corner radius from the shape tokens. Reading the ramp from
+ * the theme (not a global `TileRamp`) is what lets a COS-2 equipped TILE_SKIN restyle the tiles LIVE:
+ * `App()` provides the equipped ramp through `LocalTileRamp`, the board recomposes, the colors swap —
+ * with `BoardView`'s public API unchanged (the ramp comes from a composition local that defaults to
+ * the current ramp, so `BoardView(board)` callers/tests/previews are unaffected). The numeral is
+ * scaled down for longer numbers ([tileFontSizeSp]) so 4-digit tiles stay readable.
  *
  * ## Slide animation (FEL-1)
  * Tiles are keyed by [Tile.id] and positioned by an absolute `offset` over a single
@@ -109,6 +113,9 @@ fun BoardView(
 ) {
     val colors = FuseTheme.colors
     val motion = FuseTheme.motion
+    // COS-2 — the active tile ramp comes from the theme (the equipped TILE_SKIN, or the default
+    // ramp). Read once here and passed into each TileCell so equipping a skin restyles tiles live.
+    val tileRamp = FuseTheme.tiles
     val n = board.size
 
     BoxWithConstraints(
@@ -151,6 +158,7 @@ fun BoardView(
                     targetY = geometry.offsetY(position.row).dp,
                     size = cell,
                     motion = motion,
+                    tileRamp = tileRamp,
                     popIntensity = popIntensity,
                     isSpawn = isSpawn,
                 )
@@ -166,6 +174,7 @@ private fun TileCell(
     targetY: Dp,
     size: Dp,
     motion: FuseMotion,
+    tileRamp: TileRampStyle,
     modifier: Modifier = Modifier,
     popIntensity: Float? = null,
     isSpawn: Boolean = false,
@@ -228,7 +237,7 @@ private fun TileCell(
         }
     }
 
-    val tileColors = TileRamp.forValue(tile.value)
+    val tileColors = tileRamp.forValue(tile.value)
     Box(
         modifier = modifier
             .offset(x = anim.value.x.dp, y = anim.value.y.dp)
