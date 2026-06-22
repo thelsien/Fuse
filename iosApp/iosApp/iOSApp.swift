@@ -7,4 +7,8 @@ struct iOSApp: App {
             ContentView()
         }
     }
+    
+    init() {
+        AdsBridge.register()
+    }
 }
