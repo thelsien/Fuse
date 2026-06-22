@@ -22,7 +22,7 @@ Agile build plan · Kotlin Multiplatform + Compose Multiplatform · solo develop
 | Scope | MVP v1.0 | Powerups, gems, board variants, leaderboards, season pass, modes beyond Classic+Daily are **out** |
 | Backend | Local-only | No cloud save, no remote config, no server validation in v1.0 — all deferred to fast-follow |
 | Daily Challenge | Seeded **no-spawn puzzle**, client-derived from the UTC date | Deterministic; no server. Same seed → same start board for everyone on a given UTC day; **reach a per-day target tile in the fewest moves** (no random spawns). Solver computes "par". One-shot until solved; free undo/restart; own save slot. **Reworked from the original "endless seeded run" — see Sprint 5.** |
-| Economy | Single soft currency (Coins) | Earned by play/daily/streaks/rewarded ads; spent on cosmetics. No gems, no powerups |
+| Economy | **Currency deferred** (no coins in v1.0 yet) | Originally a single soft currency (Coins) spent on cosmetics — but with no sink shipped (powerups/store are later), the coin economy (Sprint 6) is **on hold**. Cosmetics (Sprint 7) instead unlock via **achievements/progression** (e.g. reaching 2048), not purchase. Coins can be reintroduced when a real sink exists; no gems, no powerups. |
 | Ads | AdMob (or mediation) via `expect/actual` | Rewarded (revive / coins / double-daily) + capped interstitial. **Riskiest native work** |
 | IAP | Remove Ads (anchor) | Wrap Play Billing / StoreKit, or use RevenueCat to abstract both. Restore-purchases required |
 | Rendering | Compose MP animation + Canvas | No game engine; "juice" comes from animation/haptics/sound tuning |
@@ -210,8 +210,10 @@ Implemented as **DLY-1…DLY-7** (the solver and generator are genuinely new eng
 
 > **As-built notes:** 511 tests green on Android + iOS Native at sprint close (`main` @ `de20386`). The whole daily pipeline (seed → generate → solve → play → streak → share) is deterministic and golden-tested across both platforms.
 
-### Sprint 6 — Retention economy
+### Sprint 6 — Retention economy ⏸️ *(DEFERRED — no currency sink yet)*
 *Goal: reasons to come back.*
+
+> **On hold (product decision):** the coin economy (`ECO-1..4`) is deferred until there's something to spend coins on (powerups / cosmetics store) — shipping an earn-only currency adds clutter with no payoff. `ECO-5` (stats screen) and `ECO-6` (local notifications) are independent of currency and can still be picked up on their own. When the economy returns, the achievement-unlocks in Sprint 7 can gain an optional coin-purchase path alongside.
 
 - **`ECO-1` Coins currency — `2`**
   AC: balance persisted; earn/spend API; transactions auditable for tests.
@@ -227,16 +229,18 @@ Implemented as **DLY-1…DLY-7** (the solver and generator are genuinely new eng
   AC: schedules "Daily ready" + "streak about to break"; opt-in; frequency-capped; permission flow on both platforms.
 
 ### Sprint 7 — Cosmetics
-*Goal: identity + a coin sink.*
+*Goal: identity — collectible tile skins / board themes, unlocked by **progression (achievements), not currency** (the coin economy is deferred — see Sprint 6).*
 
-- **`COS-1` Cosmetic model — `2`**
-  AC: tile-skin + board-theme definitions; owned/equipped state persisted.
+> **Unlock model (no currency):** every cosmetic is either **Free** (the default + a few starters) or **unlocked by an achievement/milestone**. At least one cosmetic is **gated behind reaching the 2048 tile** on the board (in Classic). Meeting the condition **auto-unlocks** the cosmetic — there is no purchase and no coins anywhere in this sprint. The unlock-condition model is designed to be extensible (future cosmetics can gate on other milestones/streaks), and an optional coin-purchase path can be layered on later if the economy returns.
+
+- **`COS-1` Cosmetic model + unlock conditions — `2`**
+  AC: tile-skin + board-theme definitions, each with an unlock rule (**Free** or **Achievement**, e.g. "reached 2048"); owned/equipped state persisted. Includes a persisted **achievements record** (e.g. `reached2048`, set when Classic first forms a 2048 tile) that drives unlock state. No currency.
 - **`COS-2` Theming application — `3`**
-  AC: equipping a cosmetic restyles board live via tokens; default always available.
-- **`COS-3` Collection / store screen — `3`**
-  AC: browse cosmetics; unlock with coins; owned vs locked; equip.
+  AC: equipping a cosmetic restyles the board/tiles live via the token layer (`FuseColors`/`TileRamp`); the default is always available and always equippable.
+- **`COS-3` Collection screen — `3`**
+  AC: browse cosmetics; **owned vs locked** (a locked item shows its unlock condition, e.g. "Reach 2048 to unlock" — **no coins**); equip an owned cosmetic; an item auto-unlocks once its achievement is met.
 - **`COS-4` Starter cosmetic set — `1`**
-  AC: 3–4 ship-ready skins/themes wired end-to-end.
+  AC: 3–4 ship-ready skins/themes wired end-to-end; **at least one gated behind reaching 2048**, the rest free/default.
 
 ### Sprint 8 — Ads (native, highest risk)
 *Goal: rewarded + interstitial revenue. Spike first.*
