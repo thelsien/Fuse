@@ -117,14 +117,62 @@ data class TileColors(
 )
 
 /**
- * The tile color ramp (`voltColor`) from `docs/design-tokens.md`.
+ * COS-2 — the resolvable tile-ramp abstraction: a `value -> TileColors` mapping.
  *
- * Maps a tile value (a power of two) to its [TileColors]. Values above 2048 fall
- * back to the last entry. This is a pure function of the value so the engine/UI
- * can colorize tiles without threading state; it is theme-independent (the ramp
- * is identical in light and dark per the doc).
+ * Before COS-2 the ramp was a single global `object TileRamp`. To let an EQUIPPED tile-skin
+ * cosmetic restyle the tiles live (the COS-2 acceptance criterion), the ramp had to become a
+ * VALUE that the theme can swap: `BoardView` now reads its ramp from [LocalTileRamp] (via
+ * `FuseTheme.tiles`) instead of calling a global. The default ([TileRamp]) is the app's current
+ * ramp (identity — no visual change), and a non-default skin is just another [TileRampStyle]
+ * instance with a shifted palette (see `CosmeticTileSkins`). Pure (no Compose), so it is
+ * unit-testable in commonTest and shareable by previews/tests with no started graph.
  */
-object TileRamp {
+@Immutable
+interface TileRampStyle {
+    /** Colors for a tile [value]. Must be defined for every value the board can show. */
+    fun forValue(value: Int): TileColors
+
+    /** Discrete entries (e.g. 2..2048) in ascending order, for previews/swatches. */
+    val entries: List<Pair<Int, TileColors>>
+}
+
+/**
+ * A [TileRampStyle] backed by an explicit `value -> TileColors` table plus a `> max` [fallback]
+ * (and a `<= min` clamp to the smallest entry). This is how every concrete skin (default + each
+ * cosmetic) is built: supply a ramp table + a fallback. Kept data-class-comparable so a pure test
+ * can assert two skins differ (or that a placeholder skin equals the default).
+ */
+@Immutable
+data class TableTileRampStyle(
+    private val ramp: Map<Int, TileColors>,
+    val fallback: TileColors,
+) : TileRampStyle {
+
+    override val entries: List<Pair<Int, TileColors>> = ramp.toList().sortedBy { it.first }
+
+    private val smallestKey: Int = ramp.keys.min()
+    private val largestKey: Int = ramp.keys.max()
+
+    /**
+     * Colors for a tile [value]. Exact entries for the table's keys; values above the largest key
+     * return [fallback]; values below the smallest (e.g. 0/1) clamp to the smallest entry.
+     */
+    override fun forValue(value: Int): TileColors = when {
+        value > largestKey -> fallback
+        else -> ramp[value] ?: ramp[smallestKey]!!
+    }
+}
+
+/**
+ * The default tile color ramp (`voltColor`) from `docs/design-tokens.md` — the app's current,
+ * theme-independent tiles (identical in light/dark). [Cosmetics.DEFAULT_STYLE] resolves to this,
+ * so an unequipped / default skin renders exactly today's look (COS-2 identity criterion).
+ *
+ * It remains a singleton `object` (and keeps the same `forValue` / `entries` / `fallback` surface)
+ * so existing call sites and tests that referenced `TileRamp` directly are unchanged; it now also
+ * IS a [TileRampStyle] so it can be provided through the theme.
+ */
+object TileRamp : TileRampStyle {
     // Exact ramp from the doc. 2048 carries a glow; >2048 uses the fallback row.
     private val ramp: Map<Int, TileColors> = mapOf(
         2 to TileColors(bg = Color(0xFFD7E6FF), fg = Color(0xFF1E3A8A)),
@@ -146,14 +194,14 @@ object TileRamp {
     val fallback: TileColors = TileColors(bg = Color(0xFF06324A), fg = Color(0xFF34F5C5))
 
     /** All discrete ramp entries (2..2048) in ascending order, for previews. */
-    val entries: List<Pair<Int, TileColors>> = ramp.toList().sortedBy { it.first }
+    override val entries: List<Pair<Int, TileColors>> = ramp.toList().sortedBy { it.first }
 
     /**
      * Colors for a tile [value]. Exact entries for 2..2048; values above 2048
      * return [fallback]. Values not present in the ramp (e.g. 0/1 or non-powers)
      * also resolve to the nearest sensible entry: <=2 maps to the 2 tile.
      */
-    fun forValue(value: Int): TileColors = when {
+    override fun forValue(value: Int): TileColors = when {
         value > 2048 -> fallback
         else -> ramp[value] ?: ramp[2]!!
     }

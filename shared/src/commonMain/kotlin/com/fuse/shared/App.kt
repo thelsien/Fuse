@@ -13,6 +13,7 @@ import androidx.navigation.compose.rememberNavController
 import com.fuse.daily.DailyClock
 import com.fuse.feedback.ColorblindSettings
 import com.fuse.feedback.ReducedMotionSettings
+import com.fuse.presentation.CosmeticsStore
 import com.fuse.presentation.DailyStreakStore
 import com.fuse.ui.home.rememberDailyCountdown
 import com.fuse.presentation.GameIntent
@@ -22,6 +23,10 @@ import com.fuse.ui.game.GameScreen
 import com.fuse.ui.home.HomeScreen
 import com.fuse.ui.nav.FuseDestinations
 import com.fuse.ui.settings.SettingsScreen
+import com.fuse.cosmetics.CosmeticType
+import com.fuse.cosmetics.Cosmetics
+import com.fuse.ui.theme.CosmeticStyles
+import com.fuse.ui.theme.FuseColors
 import com.fuse.ui.theme.FuseTheme
 import org.koin.compose.koinInject
 
@@ -45,6 +50,23 @@ import org.koin.compose.koinInject
  * [ReducedMotionSettings.reducedMotionEnabled] is Compose-state-backed and read here inside
  * composition, flipping it (the SHL-3 settings toggle) recomposes `App()` and re-themes everything
  * LIVE, with no app restart.
+ *
+ * ## COS-2 — equipped cosmetics feed the theme (LIVE)
+ * This is also the ONE place the EQUIPPED cosmetics restyle the board/tiles. We collect
+ * [CosmeticsStore.state] (so equipping recomposes `App()` and re-themes with no restart), read the
+ * equipped TILE_SKIN / BOARD_THEME ids, and resolve each via [CosmeticStyles]:
+ *  - TILE_SKIN id → styleId → a [com.fuse.ui.theme.TileRampStyle], passed as `FuseTheme(tileRamp = …)`
+ *    → provided through `LocalTileRamp` → read by `BoardView`. The default skin resolves to the
+ *    current ramp (identity), so the default look is always available.
+ *  - BOARD_THEME id → styleId → a [FuseColors] override (board-relevant fields), passed as
+ *    `FuseTheme(colors = …)`.
+ *
+ * **Colorblind precedence (accessibility wins):** the colorblind palette is an accessibility
+ * override and must NOT be broken by a cosmetic. So the board-theme override is applied ONLY when
+ * colorblind is OFF; when colorblind is ON we pass the plain base palette and let
+ * `FuseColors.colorblind()` (inside `FuseTheme`) own the colors. (The tile skin still applies under
+ * colorblind for now — harmless with the current near-identity colorblind palette; ACC-1 adds the
+ * colorblind tile-pattern overlay on top.)
  */
 @Composable
 fun App() {
@@ -52,10 +74,32 @@ fun App() {
     // SHL-3 — the colorblind-mode seam, mirroring reduced-motion: read the holder in composition so
     // a Settings flip recomposes App() and re-themes live. The palette behind the flag is ACC-1.
     val colorblindSettings: ColorblindSettings = koinInject()
+
+    // COS-2 — the equipped cosmetics, collected so an Equip recomposes App() and re-themes LIVE.
+    val cosmeticsStore: CosmeticsStore = koinInject()
+    val cosmetics by cosmeticsStore.state.collectAsState()
+    val equipped = cosmetics.equipped
+
+    val colorblind = colorblindSettings.colorblindEnabled
+    val basePalette = FuseColors.Dark
+    // Resolve the equipped TILE_SKIN id → its ramp style (default id → current ramp = identity).
+    val tileSkin = Cosmetics.byId(equipped.idFor(CosmeticType.TILE_SKIN))
+    val tileRamp = CosmeticStyles.tileRamp(tileSkin?.styleId ?: Cosmetics.DEFAULT_STYLE)
+    // Resolve the equipped BOARD_THEME id → a palette override, but ONLY when colorblind is OFF
+    // (colorblind precedence: the accessibility palette wins; see kdoc).
+    val boardTheme = Cosmetics.byId(equipped.idFor(CosmeticType.BOARD_THEME))
+    val themedColors = if (colorblind) {
+        basePalette
+    } else {
+        CosmeticStyles.boardColors(boardTheme?.styleId ?: Cosmetics.DEFAULT_STYLE, basePalette)
+    }
+
     FuseTheme(
         darkTheme = true,
+        colors = themedColors,
         reducedMotion = reducedMotionSettings.reducedMotionEnabled,
-        colorblind = colorblindSettings.colorblindEnabled,
+        colorblind = colorblind,
+        tileRamp = tileRamp,
     ) {
         AppShell()
     }
