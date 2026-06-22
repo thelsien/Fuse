@@ -20,6 +20,13 @@
 	<string>1</string>
 	<key>CADisableMinimumFrameDurationOnPhone</key>
 	<true/>
+	<!-- ADS-0 (Sprint 8 spike): Google Mobile Ads (AdMob) App ID. This is Google's PUBLIC SAMPLE
+	     iOS App ID — it serves only test ads and is safe to commit. GoogleMobileAds reads this at
+	     MobileAds.start(); omitting it crashes the SDK on launch. The REAL AdMob App ID is a
+	     release-time secret injected from a gitignored config (NOT committed). Effective only once
+	     the GoogleMobileAds SPM package is added to the iosApp target (see the ADS-0 gotchas doc). -->
+	<key>GADApplicationIdentifier</key>
+	<string>ca-app-pub-3940256099942544~1458002511</string>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
 	<key>UIApplicationSceneManifest</key>

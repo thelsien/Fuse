@@ -51,6 +51,13 @@ multiplatform-settings = "1.2.0"
 # TimeZone.UTC used to derive TODAY's UTC calendar day for the Daily Challenge. Uses
 # the device clock only — no network — matching the local-only daily design.
 kotlinx-datetime = "0.6.2"
+# ADS-0 (Sprint 8 spike): Google Mobile Ads SDK (AdMob, no mediation). Android-only Gradle dep
+# (the iOS SDK is added separately via Swift Package Manager to the Xcode app). 24.4.0 is a
+# current stable release that resolves on Google's Maven and builds against compileSdk 35 / AGP
+# 8.9.3 without forcing a compileSdk bump. The spike uses ONLY Google's PUBLIC test ad units, so
+# nothing account-specific is committed; the real AdMob App ID / unit IDs are injected at release
+# from a gitignored config (see the ADS-0 gotchas doc).
+play-services-ads = "24.4.0"
 
 [libraries]
 robolectric = { module = "org.robolectric:robolectric", version.ref = "robolectric" }
@@ -81,6 +88,9 @@ multiplatform-settings-test = { module = "com.russhwolf:multiplatform-settings-t
 # DLY-1: kotlinx-datetime — LocalDate / Clock.System / TimeZone.UTC for the Daily
 # Challenge clock seam (today's UTC calendar day). Multiplatform artifact (JVM + iOS).
 kotlinx-datetime = { module = "org.jetbrains.kotlinx:kotlinx-datetime", version.ref = "kotlinx-datetime" }
+# ADS-0: Google Mobile Ads (AdMob) SDK — Android only. Consumed by the :shared androidMain
+# `AdProvider.android.kt` actual (initialise MobileAds + load/show a test rewarded ad).
+play-services-ads = { module = "com.google.android.gms:play-services-ads", version.ref = "play-services-ads" }
 
 [plugins]
 kotlin-multiplatform = { id = "org.jetbrains.kotlin.multiplatform", version.ref = "kotlin" }

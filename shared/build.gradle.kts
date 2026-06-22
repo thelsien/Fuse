@@ -79,6 +79,12 @@ kotlin {
         androidMain.dependencies {
             implementation(compose.preview)
             implementation(libs.androidx.activity.compose)
+            // ADS-0 (Sprint 8 spike): Google Mobile Ads (AdMob) SDK — Android only. Backs the
+            // `AdProvider.android.kt` actual (initialise MobileAds + load/show a TEST rewarded ad).
+            // The iOS ad SDK is NOT a Gradle dep: it is added to the Xcode app via Swift Package
+            // Manager, and the iOS Kotlin actual delegates to a Swift-implemented bridge so the
+            // shared framework keeps compiling with zero third-party iOS deps.
+            implementation(libs.play.services.ads)
         }
         // On Android, Compose's `runComposeUiTest` executes as a local JVM unit
         // test through Robolectric (configured via testOptions below), so it runs
