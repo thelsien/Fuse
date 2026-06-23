@@ -14,11 +14,13 @@ import com.fuse.data.SettingsDailyStreakRepository
 import com.fuse.data.SettingsGameRepository
 import com.fuse.data.AdsRepository
 import com.fuse.data.SettingsAdsRepository
+import com.fuse.data.EntitlementsRepository
+import com.fuse.data.SettingsEntitlementsRepository
 import com.fuse.data.platformSettingsModule
 import com.fuse.ads.AdManager
 import com.fuse.ads.Entitlements
 import com.fuse.ads.InterstitialController
-import com.fuse.ads.NoOpEntitlements
+import com.fuse.ads.PersistedEntitlements
 import com.fuse.ads.platformAdsModule
 import com.fuse.iap.platformBillingModule
 import com.fuse.daily.DailyClock
@@ -100,6 +102,11 @@ val dataModule: Module = module {
     // real, and the launch counter (advanced once at app start in initKoin) drives first-session
     // suppression. Read by [InterstitialController].
     single<AdsRepository> { SettingsAdsRepository(get()) }
+    // IAP-2 (Sprint 9): the persisted Remove-Ads ENTITLEMENT flag — over the SAME platform
+    // `Settings`, under its OWN key (fuse.entitlement.removeAds). Backs [PersistedEntitlements] as
+    // the instant, offline cache of ownership; the store ([com.fuse.iap.BillingProvider]) is the
+    // authoritative source reconciled into it at app start (initKoin).
+    single<EntitlementsRepository> { SettingsEntitlementsRepository(get()) }
 }
 
 /** Domain layer — use cases. Sample use case consuming the data abstraction. */
@@ -115,10 +122,15 @@ val presentationModule: Module = module {
     // cache). ADS-2 wires this into GameScreen's game-over revive: a verified rewarded completion
     // (showRewarded() → AdResult.isRewardEarned) grants GameIntent.Revive. ADS-3/4 reuse it.
     single { AdManager(provider = get()) }
-    // ADS-4 — the Remove-Ads ENTITLEMENT hook the game-over interstitial is gated on. Always-false
-    // [NoOpEntitlements] until IAP-2 (Sprint 9) replaces this binding with real purchase state; from
-    // that moment interstitials are suppressed for entitled players (rewarded ADS-2/3 stay ungated).
-    single<Entitlements> { NoOpEntitlements }
+    // IAP-2 (Sprint 9) — the REAL, persisted Remove-Ads entitlement, REPLACING ADS-4's always-false
+    // NoOpEntitlements. `single` (one shared, persisted entitlement) seeded on construction from the
+    // [EntitlementsRepository] (so it survives relaunch + reads instantly/offline). The interstitial
+    // path ([InterstitialController] → [InterstitialPolicy]) reads its `removeAdsOwned` gate UNCHANGED;
+    // rewarded ADS-2/3 never consult it. `grantRemoveAds()` (the single grant path) is called by the
+    // purchase flow ([RemoveAdsStore.onOwned]), the seed-on-launch reconcile (initKoin), and IAP-3
+    // restore. The Entitlements interface is bound to the SAME instance so the ad sites are unchanged.
+    single { PersistedEntitlements(repository = get()) }
+    single<Entitlements> { get<PersistedEntitlements>() }
     // ADS-4 — the count/persist/decide glue between the lose-overlay "Restart" tap and the pure
     // InterstitialPolicy. `single` (one shared, stateful cadence). GameScreen calls onReplay() once
     // per game-over → replay; if it returns true the UI shows adManager.showInterstitial() THEN
@@ -161,9 +173,13 @@ val presentationModule: Module = module {
     // ownership on init, off the UI via a long-lived app scope (like CosmeticsStore). `owned` is
     // in-memory here; IAP-2 will observe it to persist + flip `Entitlements.removeAdsOwned`.
     single {
+        val entitlements = get<PersistedEntitlements>()
         RemoveAdsStore(
             billing = get(),
             scope = CoroutineScope(SupervisorJob() + Dispatchers.Main),
+            // IAP-2: a successful purchase / observed ownership grants the persisted entitlement
+            // (idempotent). No circular dep — the store holds the grant lambda, not the reverse.
+            onOwned = entitlements::grantRemoveAds,
         )
     }
 }

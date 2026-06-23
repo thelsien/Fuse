@@ -59,14 +59,27 @@ import kotlinx.coroutines.launch
  * failure), so a missing product simply leaves `product == null` / `owned == false` and the paywall
  * shows "unavailable"; a double [purchase] is guarded to a single provider call.
  *
+ * ## IAP-2 — flip the persisted entitlement on ownership
+ * IAP-2 wires the [onOwned] callback so that whenever this store observes ownership — a refresh that
+ * finds `remove_ads` already owned, OR a [purchase] resolving to [PurchaseResult.Purchased] /
+ * [PurchaseResult.AlreadyOwned] — it invokes [onOwned] EXACTLY when `owned` transitions
+ * `false → true`. The Koin singleton passes `entitlements::grantRemoveAds` (idempotent persist +
+ * flip), so a purchase suppresses interstitials and survives relaunch with NO circular dependency:
+ * the store depends on the entitlement's grant lambda, the entitlement knows nothing about the store.
+ * (IAP-3's restore reuses the same `grantRemoveAds` path.) Default is a no-op so previews/tests
+ * construct without an entitlement.
+ *
  * @param billing the billing seam; defaults to [NoOpBillingProvider] so previews/tests construct
  *   without a real store. The Koin singleton injects the platform provider.
  * @param scope the coroutine scope the suspend provider work runs on.
+ * @param onOwned invoked once whenever ownership is first observed (`owned` `false → true`), via
+ *   refresh or a successful purchase. The Koin singleton passes the persisted entitlement's grant.
  * @param refreshOnInit whether to load the product + ownership at construction (default `true`).
  */
 class RemoveAdsStore(
     private val billing: BillingProvider = NoOpBillingProvider,
     private val scope: CoroutineScope,
+    private val onOwned: () -> Unit = {},
     refreshOnInit: Boolean = true,
 ) {
     private val _state = MutableStateFlow(RemoveAdsUiState())
@@ -98,11 +111,15 @@ class RemoveAdsStore(
             val product = billing.products(listOf(Iap.PRODUCT_REMOVE_ADS))
                 .firstOrNull { it.id == Iap.PRODUCT_REMOVE_ADS }
             val owned = Iap.PRODUCT_REMOVE_ADS in billing.ownedProductIds()
+            val wasOwned = _state.value.owned
             _state.value = _state.value.copy(
                 product = product,
                 owned = owned,
                 loading = false,
             )
+            // IAP-2: a refresh that discovers ownership (e.g. a returning owner) grants the
+            // persisted entitlement once, on the false → true transition.
+            if (owned && !wasOwned) onOwned()
         }
     }
 
@@ -119,7 +136,8 @@ class RemoveAdsStore(
         _state.value = _state.value.copy(purchaseInProgress = true)
         scope.launch {
             val result = billing.purchase(Iap.PRODUCT_REMOVE_ADS)
-            val nowOwned = _state.value.owned ||
+            val wasOwned = _state.value.owned
+            val nowOwned = wasOwned ||
                 result == PurchaseResult.Purchased ||
                 result == PurchaseResult.AlreadyOwned
             _state.value = _state.value.copy(
@@ -128,6 +146,10 @@ class RemoveAdsStore(
                 lastResult = result,
             )
             _outcomes.tryEmit(result)
+            // IAP-2: a successful purchase (Purchased / AlreadyOwned) grants the persisted
+            // entitlement once, on the false → true transition — suppressing interstitials and
+            // surviving relaunch. Rewarded ads are never gated by this.
+            if (nowOwned && !wasOwned) onOwned()
         }
     }
 }
