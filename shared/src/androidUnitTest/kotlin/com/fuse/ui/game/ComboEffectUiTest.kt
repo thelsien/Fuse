@@ -7,6 +7,7 @@ import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.runComposeUiTest
 import androidx.compose.ui.test.swipeLeft
 import com.fuse.ads.AdManager
+import com.fuse.ads.InterstitialController
 import com.fuse.ads.NoOpAdProvider
 import com.fuse.engine.Board
 import com.fuse.engine.GamePhase
@@ -84,7 +85,7 @@ class ComboEffectUiTest {
         val store = GameStore.forState(stateFromBoard(comboBoard()))
         mainClock.autoAdvance = false
         setContent {
-            FuseTheme { GameScreen(store = store, haptics = testHaptics(), sound = testSound(), achievements = AchievementsStore(), adManager = AdManager(NoOpAdProvider)) }
+            FuseTheme { GameScreen(store = store, haptics = testHaptics(), sound = testSound(), achievements = AchievementsStore(), adManager = AdManager(NoOpAdProvider), interstitialController = InterstitialController()) }
         }
 
         // No combo yet — the badge is absent.
@@ -111,7 +112,7 @@ class ComboEffectUiTest {
         setContent {
             // Reduced motion active: the combo badge must NOT appear at all (hard AC).
             FuseTheme(reducedMotion = true) {
-                GameScreen(store = store, haptics = testHaptics(), sound = testSound(), achievements = AchievementsStore(), adManager = AdManager(NoOpAdProvider))
+                GameScreen(store = store, haptics = testHaptics(), sound = testSound(), achievements = AchievementsStore(), adManager = AdManager(NoOpAdProvider), interstitialController = InterstitialController())
             }
         }
 
@@ -135,7 +136,7 @@ class ComboEffectUiTest {
         val store = GameStore.forState(stateFromBoard(singleMergeBoard()))
         mainClock.autoAdvance = false
         setContent {
-            FuseTheme { GameScreen(store = store, haptics = testHaptics(), sound = testSound(), achievements = AchievementsStore(), adManager = AdManager(NoOpAdProvider)) }
+            FuseTheme { GameScreen(store = store, haptics = testHaptics(), sound = testSound(), achievements = AchievementsStore(), adManager = AdManager(NoOpAdProvider), interstitialController = InterstitialController()) }
         }
 
         onNodeWithTag(GameScreenTags.BOARD).performTouchInput { swipeLeft() }

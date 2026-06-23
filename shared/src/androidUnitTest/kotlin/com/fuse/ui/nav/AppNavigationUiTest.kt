@@ -17,6 +17,7 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import com.fuse.ads.AdManager
+import com.fuse.ads.InterstitialController
 import com.fuse.ads.NoOpAdProvider
 import com.fuse.engine.Board
 import com.fuse.engine.GamePhase
@@ -135,6 +136,7 @@ class AppNavigationUiTest {
                     sound = testSound(),
                     achievements = AchievementsStore(),
                     adManager = AdManager(NoOpAdProvider),
+                    interstitialController = InterstitialController(),
                     onBack = { navController.popBackStack() },
                 )
             }

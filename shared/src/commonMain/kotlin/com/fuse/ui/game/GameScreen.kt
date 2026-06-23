@@ -24,6 +24,8 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import com.fuse.ads.AdManager
+import com.fuse.ads.AdResult
+import com.fuse.ads.InterstitialController
 import com.fuse.ads.isRewardEarned
 import com.fuse.feedback.HapticsCoordinator
 import com.fuse.feedback.SoundCoordinator
@@ -76,6 +78,7 @@ fun GameScreen(
     sound: SoundCoordinator = koinInject(),
     achievements: AchievementsStore = koinInject(),
     adManager: AdManager = koinInject(),
+    interstitialController: InterstitialController = koinInject(),
     onBack: (() -> Unit)? = null,
 ) {
     val state by store.state.collectAsState()
@@ -173,6 +176,17 @@ fun GameScreen(
     var reviveInFlight by remember(store) { mutableStateOf(false) }
     var showNoAdNote by remember(store) { mutableStateOf(false) }
 
+    // ADS-4 — capped interstitial on the Classic game-over → REPLAY path ONLY (the give-up → new
+    // game choice on the lose overlay). NEVER mid-run, NEVER on a win, NEVER on the rewarded revive
+    // (a revived player keeps playing). On the lose overlay's "Restart" tap we ask the
+    // [InterstitialController] (which consults the persisted every-Nth cap counter, the first-session
+    // marker, and the Remove-Ads entitlement hook — all default-suppressed today). If it returns
+    // true we present an interstitial through [AdManager], IGNORING the visual result for game flow —
+    // a NoFill/Failed/NotReady must NOT lose the replay — and then start the new game regardless. If
+    // it returns false we just start the new game. `replayInFlight` guards a double-tap from launching
+    // two ads / two restarts. Rewarded paths (ADS-2/3) are unchanged and ungated.
+    var replayInFlight by remember(store) { mutableStateOf(false) }
+
     GameScreenContent(
         state = state,
         onSwipe = { store.accept(GameIntent.Move(it)) },
@@ -187,6 +201,25 @@ fun GameScreen(
             showWin = false
             showNoAdNote = false
             store.accept(GameIntent.NewGame())
+        },
+        onLoseRestart = {
+            if (!replayInFlight) {
+                replayInFlight = true
+                showNoAdNote = false
+                val shouldShow = interstitialController.onReplay()
+                if (shouldShow) {
+                    scope.launch {
+                        // Best-effort: present the interstitial, then restart regardless of outcome.
+                        @Suppress("UNUSED_VARIABLE")
+                        val result: AdResult = adManager.showInterstitial()
+                        store.accept(GameIntent.NewGame())
+                        replayInFlight = false
+                    }
+                } else {
+                    store.accept(GameIntent.NewGame())
+                    replayInFlight = false
+                }
+            }
         },
         onContinue = {
             if (!reviveInFlight) {
@@ -227,6 +260,7 @@ fun GameScreenContent(
     showWin: Boolean = false,
     onKeepGoing: () -> Unit = {},
     onRestart: () -> Unit = onNewGame,
+    onLoseRestart: () -> Unit = onRestart,
     onContinue: () -> Unit = {},
     showNoAdNote: Boolean = false,
     onBack: (() -> Unit)? = null,
@@ -334,7 +368,9 @@ fun GameScreenContent(
             LoseOverlay(
                 score = state.currentScore,
                 best = state.bestScore,
-                onRestart = onRestart,
+                // ADS-4 — game-over → replay goes through the interstitial-aware handler (lose path
+                // only). WinOverlay below keeps the plain onRestart (a win is never gated).
+                onRestart = onLoseRestart,
                 // ADS-2 — offer the rewarded "continue" only while a revive is available
                 // (game-over, not yet revived this game); after the one revive it is hidden.
                 canRevive = state.canRevive,

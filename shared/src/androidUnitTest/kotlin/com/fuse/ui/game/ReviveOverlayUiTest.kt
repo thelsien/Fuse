@@ -8,6 +8,7 @@ import com.fuse.ads.AdFormat
 import com.fuse.ads.AdManager
 import com.fuse.ads.AdResult
 import com.fuse.ads.FakeAdProvider
+import com.fuse.ads.InterstitialController
 import com.fuse.engine.Board
 import com.fuse.engine.GamePhase
 import com.fuse.engine.GameState
@@ -84,6 +85,7 @@ class ReviveOverlayUiTest {
                     sound = testSound(),
                     achievements = AchievementsStore(),
                     adManager = AdManager(fake),
+                    interstitialController = InterstitialController(),
                 )
             }
         }
@@ -122,6 +124,7 @@ class ReviveOverlayUiTest {
                     sound = testSound(),
                     achievements = AchievementsStore(),
                     adManager = AdManager(fake),
+                    interstitialController = InterstitialController(),
                 )
             }
         }
@@ -148,6 +151,7 @@ class ReviveOverlayUiTest {
                     sound = testSound(),
                     achievements = AchievementsStore(),
                     adManager = AdManager(fake),
+                    interstitialController = InterstitialController(),
                 )
             }
         }
@@ -172,6 +176,7 @@ class ReviveOverlayUiTest {
                     sound = testSound(),
                     achievements = AchievementsStore(),
                     adManager = AdManager(fake),
+                    interstitialController = InterstitialController(),
                 )
             }
         }
@@ -198,6 +203,7 @@ class ReviveOverlayUiTest {
                     sound = testSound(),
                     achievements = AchievementsStore(),
                     adManager = AdManager(fake),
+                    interstitialController = InterstitialController(),
                 )
             }
         }

@@ -6,6 +6,7 @@ import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.runComposeUiTest
 import androidx.compose.ui.test.swipeLeft
 import com.fuse.ads.AdManager
+import com.fuse.ads.InterstitialController
 import com.fuse.ads.NoOpAdProvider
 import com.fuse.engine.Board
 import com.fuse.engine.GamePhase
@@ -72,7 +73,7 @@ class MilestoneEffectUiTest {
         val store = GameStore.forState(stateFromBoard(nearMilestoneBoard()))
         mainClock.autoAdvance = false
         setContent {
-            FuseTheme { GameScreen(store = store, haptics = testHaptics(), sound = testSound(), achievements = AchievementsStore(), adManager = AdManager(NoOpAdProvider)) }
+            FuseTheme { GameScreen(store = store, haptics = testHaptics(), sound = testSound(), achievements = AchievementsStore(), adManager = AdManager(NoOpAdProvider), interstitialController = InterstitialController()) }
         }
 
         // No milestone yet — the effect overlay is absent.
@@ -98,7 +99,7 @@ class MilestoneEffectUiTest {
         setContent {
             // Reduced motion active: the milestone burst/flash must NOT appear at all (hard AC).
             FuseTheme(reducedMotion = true) {
-                GameScreen(store = store, haptics = testHaptics(), sound = testSound(), achievements = AchievementsStore(), adManager = AdManager(NoOpAdProvider))
+                GameScreen(store = store, haptics = testHaptics(), sound = testSound(), achievements = AchievementsStore(), adManager = AdManager(NoOpAdProvider), interstitialController = InterstitialController())
             }
         }
 
@@ -133,7 +134,7 @@ class MilestoneEffectUiTest {
         )
         mainClock.autoAdvance = false
         setContent {
-            FuseTheme { GameScreen(store = store, haptics = testHaptics(), sound = testSound(), achievements = AchievementsStore(), adManager = AdManager(NoOpAdProvider)) }
+            FuseTheme { GameScreen(store = store, haptics = testHaptics(), sound = testSound(), achievements = AchievementsStore(), adManager = AdManager(NoOpAdProvider), interstitialController = InterstitialController()) }
         }
 
         onNodeWithTag(GameScreenTags.BOARD).performTouchInput { swipeLeft() }

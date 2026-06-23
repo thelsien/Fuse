@@ -6,6 +6,7 @@ import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.runComposeUiTest
 import androidx.compose.ui.test.swipeLeft
 import com.fuse.ads.AdManager
+import com.fuse.ads.InterstitialController
 import com.fuse.ads.NoOpAdProvider
 import com.fuse.engine.Board
 import com.fuse.engine.GamePhase
@@ -90,7 +91,7 @@ class ReducedMotionSwitchUiTest {
         setContent {
             // Exactly App()'s wiring: the SETTING drives FuseTheme(reducedMotion = …).
             FuseTheme(reducedMotion = settings.reducedMotionEnabled) {
-                GameScreen(store = store, haptics = testHaptics(), sound = testSound(), achievements = AchievementsStore(), adManager = AdManager(NoOpAdProvider))
+                GameScreen(store = store, haptics = testHaptics(), sound = testSound(), achievements = AchievementsStore(), adManager = AdManager(NoOpAdProvider), interstitialController = InterstitialController())
             }
         }
 
@@ -115,7 +116,7 @@ class ReducedMotionSwitchUiTest {
         mainClock.autoAdvance = false
         setContent {
             FuseTheme(reducedMotion = settings.reducedMotionEnabled) {
-                GameScreen(store = store, haptics = testHaptics(), sound = testSound(), achievements = AchievementsStore(), adManager = AdManager(NoOpAdProvider))
+                GameScreen(store = store, haptics = testHaptics(), sound = testSound(), achievements = AchievementsStore(), adManager = AdManager(NoOpAdProvider), interstitialController = InterstitialController())
             }
         }
 
@@ -134,7 +135,7 @@ class ReducedMotionSwitchUiTest {
         mainClock.autoAdvance = false
         setContent {
             FuseTheme(reducedMotion = settings.reducedMotionEnabled) {
-                GameScreen(store = store, haptics = testHaptics(), sound = testSound(), achievements = AchievementsStore(), adManager = AdManager(NoOpAdProvider))
+                GameScreen(store = store, haptics = testHaptics(), sound = testSound(), achievements = AchievementsStore(), adManager = AdManager(NoOpAdProvider), interstitialController = InterstitialController())
             }
         }
 
@@ -158,7 +159,7 @@ class ReducedMotionSwitchUiTest {
         mainClock.autoAdvance = false
         setContent {
             FuseTheme(reducedMotion = settings.reducedMotionEnabled) {
-                GameScreen(store = store, haptics = testHaptics(), sound = testSound(), achievements = AchievementsStore(), adManager = AdManager(NoOpAdProvider))
+                GameScreen(store = store, haptics = testHaptics(), sound = testSound(), achievements = AchievementsStore(), adManager = AdManager(NoOpAdProvider), interstitialController = InterstitialController())
             }
         }
 
