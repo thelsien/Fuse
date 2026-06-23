@@ -17,7 +17,8 @@ captures/
 *.aab
 *.ap_
 *.dex
-release/
+# Release build artifacts live under build/ (already ignored above). Do NOT use a bare `release/`
+# pattern here — it would also swallow non-build dirs like docs/release/.
 
 # iOS / Xcode / KMP
 *.xcuserstate
@@ -42,6 +43,9 @@ google-services.json
 GoogleService-Info.plist
 *.keystore
 *.jks
+# Android release signing material (REL): the upload keystore + the properties file that
+# points at it and holds its passwords. Only keystore.properties.template is committed.
+keystore.properties
 
 # Misc
 *.log
