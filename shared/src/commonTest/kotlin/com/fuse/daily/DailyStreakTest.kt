@@ -4,6 +4,8 @@ import com.fuse.data.SettingsDailyStreakRepository
 import com.russhwolf.settings.MapSettings
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
+import kotlin.test.assertTrue
 
 /**
  * DLY-5 — pure unit tests for the daily streak model ([DailyStreak], [recordCompletion],
@@ -110,6 +112,86 @@ class DailyStreakTest {
         val a = DailyStreak().recordCompletion(5).recordCompletion(6).recordCompletion(8)
         val b = DailyStreak().recordCompletion(5).recordCompletion(6).recordCompletion(8)
         assertEquals(a, b, "same inputs → same streak")
+    }
+
+    // ---- ADS-3 streak-saver: canRestore / restore ----
+
+    @Test
+    fun canRestoreIsTrueOnlyWhenAStreakExistedAndIsNowBroken() {
+        // A 3-day streak ending day 102; on day 105 it is broken (days 103, 104 missed).
+        val broken = DailyStreak().recordCompletion(100).recordCompletion(101).recordCompletion(102)
+        assertEquals(0, broken.liveCurrent(today = 105), "precondition: broken on day 105")
+        assertTrue(broken.canRestore(today = 105), "had a streak + now broken → restorable")
+    }
+
+    @Test
+    fun canRestoreIsFalseWhenStreakIsStillAlive() {
+        val alive = DailyStreak().recordCompletion(100).recordCompletion(101) // last 101
+        assertFalse(alive.canRestore(today = 101), "solved today → alive, nothing to restore")
+        assertFalse(alive.canRestore(today = 102), "solved yesterday → still extendable, not broken")
+    }
+
+    @Test
+    fun canRestoreIsFalseWhenNeverPlayed() {
+        assertFalse(DailyStreak().canRestore(today = 100), "never played → nothing to restore")
+    }
+
+    @Test
+    fun restoreBridgesToYesterdayKeepingCurrentAndLongest() {
+        val broken = DailyStreak(current = 3, longest = 7, lastCompletedDay = 102)
+        val saved = broken.restore(today = 105)
+        assertEquals(104, saved.lastCompletedDay, "lastCompletedDay bridged to today - 1")
+        assertEquals(3, saved.current, "current preserved")
+        assertEquals(7, saved.longest, "longest preserved")
+        assertEquals(3, saved.liveCurrent(today = 105), "streak is live (extendable) again")
+    }
+
+    @Test
+    fun restoreIsANoOpWhenNotRestorable() {
+        val alive = DailyStreak().recordCompletion(100).recordCompletion(101)
+        assertEquals(alive, alive.restore(today = 101), "alive → restore is a no-op")
+        assertEquals(DailyStreak(), DailyStreak().restore(today = 100), "never played → no-op")
+    }
+
+    @Test
+    fun secondRestoreIsANoOp() {
+        val broken = DailyStreak(current = 4, longest = 4, lastCompletedDay = 100)
+        val once = broken.restore(today = 105)
+        assertTrue(broken.canRestore(today = 105))
+        assertFalse(once.canRestore(today = 105), "after restore the break is gone (natural idempotency)")
+        assertEquals(once, once.restore(today = 105), "a second restore changes nothing")
+    }
+
+    @Test
+    fun restoreThenSolvingTodayContinuesTheStreak() {
+        // A broken 3-streak, restored on day 105, then solving day 105 → 4 (continued, not reset to 1).
+        val broken = DailyStreak(current = 3, longest = 3, lastCompletedDay = 102)
+        val saved = broken.restore(today = 105)
+        val solved = saved.recordCompletion(dayNumber = 105)
+        assertEquals(4, solved.current, "solving today after a restore CONTINUES the streak (3 → 4)")
+        assertEquals(4, solved.longest)
+        assertEquals(4, solved.liveCurrent(today = 105))
+    }
+
+    @Test
+    fun restoredStreakSurvivesJsonRoundTrip() {
+        // A restored streak (any new fields) persists; and an OLD blob (no new fields) still decodes.
+        val settings = MapSettings()
+        val repo = SettingsDailyStreakRepository(settings)
+        val restored = DailyStreak(current = 5, longest = 9, lastCompletedDay = 200).restore(today = 201)
+        repo.saveStreak(restored)
+        assertEquals(restored, repo.loadStreak(), "restored streak survives a round trip")
+
+        // Back-compat: an old blob with only the original three fields still decodes (no added field).
+        settings.putString(
+            SettingsDailyStreakRepository.KEY_STREAK,
+            "{\"current\":2,\"longest\":4,\"lastCompletedDay\":50}",
+        )
+        assertEquals(
+            DailyStreak(current = 2, longest = 4, lastCompletedDay = 50),
+            repo.loadStreak(),
+            "an old blob (no new fields) decodes unchanged",
+        )
     }
 
     @Test

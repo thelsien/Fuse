@@ -21,6 +21,10 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -29,9 +33,12 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import com.fuse.ads.AdManager
+import com.fuse.ads.isRewardEarned
 import com.fuse.daily.Sharer
 import com.fuse.daily.buildDailyShareCard
 import com.fuse.engine.Direction
+import kotlinx.coroutines.launch
 import com.fuse.presentation.DailyEffect
 import com.fuse.presentation.DailyIntent
 import com.fuse.presentation.DailyStore
@@ -71,10 +78,12 @@ fun DailyScreen(
     store: DailyStore = koinInject(),
     streakStore: DailyStreakStore = koinInject(),
     sharer: Sharer = koinInject(),
+    adManager: AdManager = koinInject(),
     onBack: (() -> Unit)? = null,
 ) {
     val state by store.state.collectAsState()
     val streak by streakStore.state.collectAsState()
+    val scope = rememberCoroutineScope()
 
     // DLY-5 — record the streak on a LIVE solve. The store's one-shot DailyEffect.Solved fires
     // exactly once on the winning move (not on resume of an already-solved run), mirroring how
@@ -89,12 +98,44 @@ fun DailyScreen(
         }
     }
 
+    // ADS-3 (streak-saver) — rewarded "restore my broken daily streak" orchestration lives HERE
+    // (mirroring ADS-2's revive in GameScreen, not in the pure store). The prompt is shown only
+    // when `streak.canRestore` (the player HAD a streak and it's now broken — missed a day). On the
+    // "Restore streak — Watch Ad" tap we launch a rewarded ad through the injected [AdManager]
+    // (load-then-show). The streak is restored ONLY on a verified rewarded COMPLETION
+    // ([AdResult.isRewardEarned], i.e. AdResult.Rewarded) → streakStore.restore(), which bridges
+    // the gap so the streak is live again (and solving today extends it). Every other outcome
+    // (NoFill / Dismissed / Failed / NotReady) degrades gracefully: NO restore, no crash, the
+    // prompt stays and Restart/play remain available; we surface a brief "No ad available" note.
+    // `restoreInFlight` guards a double-tap launching two ads. Rewarded is NOT entitlement-gated —
+    // Remove-Ads keeps rewarded — so the streak-saver is offered regardless of any purchase state.
+    var restoreInFlight by remember(streakStore) { mutableStateOf(false) }
+    var showNoAdNote by remember(streakStore) { mutableStateOf(false) }
+
     DailyScreenContent(
         state = state,
         streak = streak,
         onSwipe = { store.accept(DailyIntent.Move(it)) },
         onUndo = { store.accept(DailyIntent.Undo) },
         onRestart = { store.accept(DailyIntent.Restart) },
+        showRestoreNoAdNote = showNoAdNote,
+        onRestoreStreak = {
+            if (!restoreInFlight) {
+                restoreInFlight = true
+                showNoAdNote = false
+                scope.launch {
+                    val result = adManager.showRewarded()
+                    if (result.isRewardEarned) {
+                        // Verified completion → bridge the gap; prompt disappears (canRestore=false).
+                        streakStore.restore()
+                    } else {
+                        // Graceful: keep the prompt, tell the player no ad was available.
+                        showNoAdNote = true
+                    }
+                    restoreInFlight = false
+                }
+            }
+        },
         // DLY-7 — Share builds the result card from the day's SHARED start board (so cards are
         // comparable; never the player's mid-solve board), the result fields, and the live
         // streak, then hands it to the platform [Sharer] (native share sheet). User-initiated.
@@ -132,6 +173,8 @@ fun DailyScreenContent(
     modifier: Modifier = Modifier,
     streak: DailyStreakState = DailyStreakState(),
     onShare: () -> Unit = {},
+    onRestoreStreak: () -> Unit = {},
+    showRestoreNoAdNote: Boolean = false,
     onBack: (() -> Unit)? = null,
 ) {
     val c = FuseTheme.colors
@@ -161,6 +204,18 @@ fun DailyScreenContent(
             }
 
             DailyHud(state = state)
+
+            // ADS-3 (streak-saver) — when the player's daily streak has BROKEN (they missed a day)
+            // and there's still a run to rescue, offer to restore it by watching a rewarded ad.
+            // Hidden once the streak is alive again (restored or extended) — natural idempotency.
+            if (streak.canRestore) {
+                Spacer(Modifier.height(16.dp))
+                StreakRestorePrompt(
+                    streak = streak.restorableLength,
+                    showNoAdNote = showRestoreNoAdNote,
+                    onRestore = onRestoreStreak,
+                )
+            }
 
             Spacer(Modifier.height(16.dp))
 
@@ -212,6 +267,77 @@ fun DailyScreenContent(
                 par = state.par,
                 streak = streak,
                 onShare = onShare,
+            )
+        }
+    }
+}
+
+/**
+ * ADS-3 (streak-saver) — the broken-streak rescue prompt shown above the board when
+ * [DailyStreakState.canRestore]. Surfaces the lost streak length and a "Restore streak — Watch Ad"
+ * button; tapping launches a rewarded ad (orchestrated by [DailyScreen]). On a graceful no-ad
+ * outcome, [showNoAdNote] renders a brief "No ad available" line and the prompt stays.
+ *
+ * @param streak the broken streak's length to rescue ([DailyStreakState.restorableLength]).
+ * @param onRestore tapped to start the rewarded ad; the actual restore happens only on a verified
+ *   reward (reward-only) back in [DailyScreen].
+ */
+@Composable
+private fun StreakRestorePrompt(
+    streak: Int,
+    showNoAdNote: Boolean,
+    onRestore: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val c = FuseTheme.colors
+    Column(
+        modifier = modifier
+            .fillMaxWidth()
+            .clip(FuseTheme.shapes.card)
+            .background(c.card)
+            .border(1.dp, c.gold, FuseTheme.shapes.card)
+            .padding(16.dp)
+            .testTag(DailyScreenTags.RESTORE_PROMPT),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
+        Text(
+            "🔥 Your $streak-day streak broke",
+            style = FuseTheme.type.headingM.copy(color = c.gold),
+            textAlign = TextAlign.Center,
+            modifier = Modifier
+                .testTag(DailyScreenTags.RESTORE_MESSAGE)
+                .semantics { contentDescription = "Your $streak-day daily streak broke" },
+        )
+        Text(
+            "Watch a short ad to restore it.",
+            style = FuseTheme.type.bodyS.copy(color = c.sub),
+            textAlign = TextAlign.Center,
+        )
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .heightIn(min = 48.dp)
+                .clip(FuseTheme.shapes.card)
+                .background(c.card2)
+                .border(1.dp, c.line, FuseTheme.shapes.card)
+                .clickable(onClick = onRestore)
+                .padding(horizontal = 16.dp, vertical = 12.dp)
+                .testTag(DailyScreenTags.RESTORE_BUTTON)
+                .semantics { contentDescription = "Restore streak, watch ad" },
+            contentAlignment = Alignment.Center,
+        ) {
+            Text(
+                "Restore streak — Watch Ad",
+                style = FuseTheme.type.headingM.copy(color = c.text),
+            )
+        }
+        if (showNoAdNote) {
+            Text(
+                "No ad available — try again in a moment.",
+                style = FuseTheme.type.bodyS.copy(color = c.sub),
+                textAlign = TextAlign.Center,
+                modifier = Modifier.testTag(DailyScreenTags.RESTORE_NO_AD_NOTE),
             )
         }
     }
@@ -397,6 +523,18 @@ object DailyScreenTags {
 
     /** DLY-7 — the Share button on the solved overlay (builds + shares the result card). */
     const val SHARE_BUTTON: String = "daily_share_button"
+
+    /** ADS-3 — the streak-saver prompt shown when a broken streak can be restored. */
+    const val RESTORE_PROMPT: String = "daily_restore_prompt"
+
+    /** ADS-3 — the "Your N-day streak broke" message inside the restore prompt. */
+    const val RESTORE_MESSAGE: String = "daily_restore_message"
+
+    /** ADS-3 — the "Restore streak — Watch Ad" button inside the restore prompt. */
+    const val RESTORE_BUTTON: String = "daily_restore_button"
+
+    /** ADS-3 — the graceful "No ad available" note shown on a non-reward outcome. */
+    const val RESTORE_NO_AD_NOTE: String = "daily_restore_no_ad_note"
 }
 
 /** Stable test tags for the Daily HUD stat values. */
