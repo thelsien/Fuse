@@ -27,6 +27,7 @@ import com.fuse.ads.AdManager
 import com.fuse.ads.AdResult
 import com.fuse.ads.InterstitialController
 import com.fuse.ads.isRewardEarned
+import com.fuse.analytics.AnalyticsValues
 import com.fuse.feedback.HapticsCoordinator
 import com.fuse.feedback.SoundCoordinator
 import com.fuse.feedback.comboCount
@@ -211,7 +212,8 @@ fun GameScreen(
                     scope.launch {
                         // Best-effort: present the interstitial, then restart regardless of outcome.
                         @Suppress("UNUSED_VARIABLE")
-                        val result: AdResult = adManager.showInterstitial()
+                        // ANL-2: game-over interstitial placement → ad_impression logged in AdManager.
+                        val result: AdResult = adManager.showInterstitial(AnalyticsValues.PLACEMENT_GAME_OVER)
                         store.accept(GameIntent.NewGame())
                         replayInFlight = false
                     }
@@ -226,7 +228,8 @@ fun GameScreen(
                 reviveInFlight = true
                 showNoAdNote = false
                 scope.launch {
-                    val result = adManager.showRewarded()
+                    // ANL-2: revive placement → ad_impression / ad_reward_granted logged in AdManager.
+                    val result = adManager.showRewarded(AnalyticsValues.PLACEMENT_REVIVE)
                     if (result.isRewardEarned) {
                         store.accept(GameIntent.Revive)
                     } else {

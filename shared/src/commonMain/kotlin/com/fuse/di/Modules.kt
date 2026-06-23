@@ -122,7 +122,9 @@ val presentationModule: Module = module {
     // (bound by [platformAdsModule]). `single` mirrors the provider's single (one stateful ad
     // cache). ADS-2 wires this into GameScreen's game-over revive: a verified rewarded completion
     // (showRewarded() → AdResult.isRewardEarned) grants GameIntent.Revive. ADS-3/4 reuse it.
-    single { AdManager(provider = get()) }
+    // ANL-2 (Sprint 9): the AnalyticsLogger is injected so AdManager logs `ad_impression` /
+    // `ad_reward_granted` (format + placement) at the single ad seam every placement flows through.
+    single { AdManager(provider = get(), analytics = get()) }
     // IAP-2 (Sprint 9) — the REAL, persisted Remove-Ads entitlement, REPLACING ADS-4's always-false
     // NoOpEntitlements. `single` (one shared, persisted entitlement) seeded on construction from the
     // [EntitlementsRepository] (so it survives relaunch + reads instantly/offline). The interstitial
@@ -141,11 +143,15 @@ val presentationModule: Module = module {
     // UIB-3/UIB-6: the game's MVI store. `single` — it holds the live GameState, so the
     // whole app shares one game instance. The store takes the [GameRepository] so it
     // loads any saved game/best on init (resume) and persists after every change.
-    single { GameStore(repository = get()) }
+    // ANL-2: the analytics logger is injected so the store fires `game_start` (NewGame) and
+    // `game_over` (mode/score/best_tile/moves on the Lost transition).
+    single { GameStore(repository = get(), analytics = get()) }
     // DLY-4: the Daily Challenge MVI store. `single` — it holds the live daily run, so the
     // whole app shares one. It resolves the [DailyClock] (today's UTC day → today's puzzle)
     // and the [DailyRepository] (the single slot: resume today / reset on a new day).
-    single { DailyStore(clock = get(), repository = get()) }
+    // ANL-2: the analytics logger is injected so the store fires `daily_completed`
+    // (day_number/moves/par) on the solving move.
+    single { DailyStore(clock = get(), repository = get(), analytics = get()) }
     // DLY-5: the Daily STREAK store. `single` — it owns the live, persisted streak shared by
     // the Daily screen (solved overlay) and Home. It resolves the [DailyClock] (today's day,
     // for the live-current display) and the [DailyStreakRepository] (its own slot). `DailyScreen`
@@ -181,6 +187,8 @@ val presentationModule: Module = module {
             // IAP-2: a successful purchase / observed ownership grants the persisted entitlement
             // (idempotent). No circular dep — the store holds the grant lambda, not the reverse.
             onOwned = entitlements::grantRemoveAds,
+            // ANL-2: a successful purchase logs `iap_purchase` (product_id=remove_ads).
+            analytics = get(),
         )
     }
 }

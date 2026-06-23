@@ -1,5 +1,9 @@
 package com.fuse.presentation
 
+import com.fuse.analytics.AnalyticsLogger
+import com.fuse.analytics.NoOpAnalyticsLogger
+import com.fuse.analytics.logGameOver
+import com.fuse.analytics.logGameStart
 import com.fuse.data.GameRepository
 import com.fuse.data.NoOpGameRepository
 import com.fuse.engine.Board
@@ -97,6 +101,15 @@ class GameStore(
     private val seedSource: () -> Long = incrementingSeedSource(initialSeed),
     startState: GameState? = null,
     private val repository: GameRepository = NoOpGameRepository,
+    /**
+     * ANL-2 — analytics seam. The store fires `game_start` on a fresh/restarted game and `game_over`
+     * (mode/score/best_tile/moves) on the move that loses the game, via the typed taxonomy helpers.
+     * Logging is a pure side effect at the same point the equivalent state transition happens, so the
+     * reduce stays synchronous. Defaults to [NoOpAnalyticsLogger] so existing tests/previews construct
+     * unchanged; the Koin singleton injects the real (Debug, later Firebase) logger. Per-move/merge
+     * events are intentionally NOT logged (see the taxonomy volume note); only these aggregates are.
+     */
+    private val analytics: AnalyticsLogger = NoOpAnalyticsLogger,
 ) {
     /**
      * The best score to carry into a fresh/restarted game: the higher of the
@@ -186,6 +199,16 @@ class GameStore(
             // reaches the target, alongside the persistent Won phase. See KDoc on
             // [GameEffect.Won] for why this is an effect, not derived from state.
             if (outcome.justWon) _effects.tryEmit(GameEffect.Won)
+            // ANL-2 — log `game_over` exactly once, on the accepted move that LOST the game
+            // (the Lost transition). Aggregate outcome only: final score, highest tile reached
+            // (max over the board), and the game's move count. No PII; no per-move events.
+            if (outcome.gameOver) {
+                analytics.logGameOver(
+                    score = gameState.score.current.toInt(),
+                    bestTile = gameState.board.tiles().maxOfOrNull { it.value } ?: 0,
+                    moves = gameState.moveCount,
+                )
+            }
         } else {
             // True no-op: keep gameState; only raise the blocked signals.
             _state.value = _state.value.copy(
@@ -208,6 +231,9 @@ class GameStore(
         _state.value = GameUiState.playing(gameState)
         // UIB-6: overwrite the saved game with the fresh board and persist the best.
         persist()
+        // ANL-2 — a new Classic game began. Logged on the explicit NewGame intent (a player-started
+        // game), NOT on construction/resume (relaunching into a saved game is not a new game).
+        analytics.logGameStart()
     }
 
     /**
