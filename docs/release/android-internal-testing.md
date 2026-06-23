@@ -17,7 +17,8 @@ unsigned release.
   time. If it exists, it creates a `release` signing config and assigns it to `buildTypes.release`.
   **If it's absent, the release build is unsigned and configuration still succeeds** — so CI and
   clones without a keystore are unaffected.
-- `versionCode = 1`, `versionName = "1.0"`, `applicationId = "com.fuse.android"`.
+- `versionCode = 1`, `versionName = "1.0"`, `applicationId = "com.thelsien.fuse"` (the `namespace`
+  stays `com.fuse.android` — internal R/BuildConfig only; Play keys on `applicationId`).
 - `release.isMinifyEnabled = false` for now — R8/proguard keep-rules for the AdMob + Play Billing
   SDKs are a later REL task; not needed for internal testing.
 - `keystore.properties` and `*.jks` / `*.keystore` are **gitignored**. Only
@@ -96,7 +97,7 @@ JAVA_HOME="$(/usr/libexec/java_home -v 17)" \
 
 Do these in [Play Console](https://play.google.com/console):
 
-1. **Create the app.** Its package name MUST be **`com.fuse.android`** (matches `applicationId`).
+1. **Create the app.** Its package name MUST be **`com.thelsien.fuse`** (matches `applicationId`).
    This is permanent in Play Console — get it right.
 2. **Enable Play App Signing** (default for new apps). You upload with the **upload key** from step 1;
    Google holds the real app-signing key and re-signs. Keep your upload key safe but recoverable.
