@@ -1,10 +1,14 @@
 package com.fuse.presentation
 
+import com.fuse.ads.PersistedEntitlements
+import com.fuse.data.SettingsEntitlementsRepository
+import com.fuse.iap.BillingProvider
 import com.fuse.iap.FakeBillingProvider
 import com.fuse.iap.Iap
 import com.fuse.iap.NoOpBillingProvider
 import com.fuse.iap.Product
 import com.fuse.iap.PurchaseResult
+import com.russhwolf.settings.MapSettings
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
@@ -302,5 +306,155 @@ class RemoveAdsStoreTest {
 
         assertEquals(listOf(Iap.PRODUCT_REMOVE_ADS), billing.purchaseCalls)
         assertTrue(store.state.value.owned)
+    }
+
+    // --- IAP-3: restore ---------------------------------------------------------
+
+    /** A [BillingProvider] whose [restore] throws — to exercise the graceful Failed path. */
+    private class ThrowingRestoreProvider : BillingProvider {
+        override suspend fun products(ids: List<String>): List<Product> = emptyList()
+        override suspend fun purchase(id: String): PurchaseResult = PurchaseResult.Failed
+        override suspend fun restore(): List<String> = throw IllegalStateException("boom")
+        override suspend fun ownedProductIds(): Set<String> = emptySet()
+    }
+
+    @Test
+    fun restoreThatFindsOwnershipMarksOwnedAndSurfacesRestored() = runTest {
+        // The store reports remove_ads owned (e.g. bought on another device / before this install).
+        val billing = FakeBillingProvider().apply { owned += Iap.PRODUCT_REMOVE_ADS }
+        // refreshOnInit=false so we isolate the restore() path (refresh would also discover ownership).
+        val store = store(billing, refreshOnInit = false)
+
+        var outcome: RestoreResult? = null
+        val job = backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
+            outcome = store.restoreOutcomes.first()
+        }
+
+        store.restore()
+        advanceUntilIdle()
+        job.cancel()
+
+        assertTrue(store.state.value.owned, "restore re-marks ownership")
+        assertFalse(store.state.value.restoreInProgress)
+        assertEquals(RestoreResult.Restored, outcome)
+        assertEquals(1, billing.restoreCount, "restore asked the store exactly once")
+    }
+
+    @Test
+    fun restoreWithNothingOwnedSurfacesNothingToRestoreAndStaysUnowned() = runTest {
+        val billing = FakeBillingProvider() // store owns nothing
+        val store = store(billing, refreshOnInit = false)
+
+        var outcome: RestoreResult? = null
+        val job = backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
+            outcome = store.restoreOutcomes.first()
+        }
+
+        store.restore()
+        advanceUntilIdle()
+        job.cancel()
+
+        assertFalse(store.state.value.owned, "nothing to restore leaves un-owned")
+        assertEquals(RestoreResult.NothingToRestore, outcome)
+    }
+
+    @Test
+    fun restoreErrorSurfacesFailedGracefullyAndDoesNotGrant() = runTest {
+        var grants = 0
+        val store = store(ThrowingRestoreProvider(), onOwned = { grants++ }, refreshOnInit = false)
+
+        var outcome: RestoreResult? = null
+        val job = backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
+            outcome = store.restoreOutcomes.first()
+        }
+
+        store.restore() // must not crash
+        advanceUntilIdle()
+        job.cancel()
+
+        assertEquals(RestoreResult.Failed, outcome)
+        assertFalse(store.state.value.owned)
+        assertFalse(store.state.value.restoreInProgress)
+        assertEquals(0, grants, "a failed restore grants nothing")
+    }
+
+    @Test
+    fun restoreFiresOnOwnedOnceForTheEntitlementGrant() = runTest {
+        val billing = FakeBillingProvider().apply { owned += Iap.PRODUCT_REMOVE_ADS }
+        var grants = 0
+        val store = store(billing, onOwned = { grants++ }, refreshOnInit = false)
+
+        store.restore()
+        advanceUntilIdle()
+
+        assertTrue(store.state.value.owned)
+        assertEquals(1, grants, "restore re-grants via the SAME onOwned path (false → true)")
+    }
+
+    @Test
+    fun restoreDoesNotReGrantWhenAlreadyOwned() = runTest {
+        // Already owned via an init refresh; a later restore observes owned was already true.
+        val billing = FakeBillingProvider().apply { owned += Iap.PRODUCT_REMOVE_ADS }
+        var grants = 0
+        val store = store(billing, onOwned = { grants++ }) // refreshOnInit=true → grants once
+        advanceUntilIdle()
+        assertEquals(1, grants)
+
+        store.restore()
+        advanceUntilIdle()
+        assertEquals(1, grants, "ownership already observed → restore does not re-grant")
+    }
+
+    @Test
+    fun doubleRestoreIsGuardedToASingleProviderCall() = runTest {
+        val billing = FakeBillingProvider().apply { owned += Iap.PRODUCT_REMOVE_ADS }
+        val store = store(billing, refreshOnInit = false)
+
+        // Two synchronous taps: the second is guarded out by restoreInProgress.
+        store.restore()
+        store.restore()
+        advanceUntilIdle()
+
+        assertEquals(1, billing.restoreCount, "concurrent restore guarded to one provider call")
+    }
+
+    @Test
+    fun restoreIsGuardedWhileAPurchaseIsInFlight() = runTest {
+        val billing = FakeBillingProvider().apply {
+            scriptPurchase(Iap.PRODUCT_REMOVE_ADS, PurchaseResult.Purchased)
+        }
+        val store = store(billing, refreshOnInit = false)
+
+        // Start a purchase, then attempt restore before it resolves: restore is a no-op.
+        store.purchase()
+        store.restore()
+        advanceUntilIdle()
+
+        assertEquals(0, billing.restoreCount, "restore is suppressed while a purchase is in flight")
+    }
+
+    @Test
+    fun restoreReGrantsFromFreshInstallEntitlementCacheAndPersists() = runTest {
+        // FRESH-INSTALL re-grant proof: the local entitlement cache starts FALSE (fresh install) while
+        // the STORE still reports remove_ads owned. After restore() the entitlement is true AND
+        // persisted — survives a "relaunch" (a new PersistedEntitlements over the same Settings).
+        val settings = MapSettings()
+        val entitlements = PersistedEntitlements(SettingsEntitlementsRepository(settings))
+        assertFalse(entitlements.removeAdsOwned, "fresh install: local entitlement cache is false")
+
+        val billing = FakeBillingProvider().apply { owned += Iap.PRODUCT_REMOVE_ADS }
+        val store = store(billing, onOwned = entitlements::grantRemoveAds, refreshOnInit = false)
+
+        store.restore()
+        advanceUntilIdle()
+
+        assertTrue(entitlements.removeAdsOwned, "restore re-granted the entitlement from the store")
+        // PERSISTED: a fresh entitlement over the same Settings ("relaunch") reads true.
+        val reloaded = PersistedEntitlements(SettingsEntitlementsRepository(settings))
+        assertTrue(reloaded.removeAdsOwned, "the re-granted entitlement survives relaunch")
+        assertTrue(
+            SettingsEntitlementsRepository(settings).loadRemoveAdsOwned(),
+            "restore persisted the entitlement",
+        )
     }
 }
