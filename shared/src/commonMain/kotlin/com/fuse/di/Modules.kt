@@ -40,6 +40,7 @@ import com.fuse.feedback.SoundSettings
 import com.fuse.feedback.platformHapticsModule
 import com.fuse.feedback.platformSoundModule
 import com.fuse.presentation.GameStore
+import com.fuse.presentation.RemoveAdsStore
 import com.fuse.presentation.SamplePresenter
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -151,6 +152,17 @@ val presentationModule: Module = module {
         CosmeticsStore(
             achievementsStore = get(),
             repository = get(),
+            scope = CoroutineScope(SupervisorJob() + Dispatchers.Main),
+        )
+    }
+    // IAP-1 (Sprint 9): the Remove-Ads store over the platform [com.fuse.iap.BillingProvider]
+    // (bound by [platformBillingModule]). `single` — one shared product-load + purchase-flow VM the
+    // paywall (IAP-4) collects. Loads `remove_ads` (with its store-localized price) + current
+    // ownership on init, off the UI via a long-lived app scope (like CosmeticsStore). `owned` is
+    // in-memory here; IAP-2 will observe it to persist + flip `Entitlements.removeAdsOwned`.
+    single {
+        RemoveAdsStore(
+            billing = get(),
             scope = CoroutineScope(SupervisorJob() + Dispatchers.Main),
         )
     }
