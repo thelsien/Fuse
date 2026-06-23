@@ -160,9 +160,22 @@ private class AndroidBillingProvider(private val context: Context) : BillingProv
             .also { pendingPurchase = null }
     }
 
-    override suspend fun restore(): List<String> = ownedProductIds().toList()
+    /**
+     * IAP-3 — restore on Play Billing IS `queryPurchasesAsync(INAPP)`: Play has no separate "restore"
+     * API; the account's purchases are authoritative and available offline-cached on a fresh install
+     * once Play services sync. We map PURCHASED entries to their product ids AND re-acknowledge any
+     * that arrived un-acknowledged (e.g. a purchase made on another device, restored here before this
+     * install acked it) so Play does not auto-refund them. Defensive: empty list on any failure.
+     */
+    override suspend fun restore(): List<String> = queryOwned(acknowledge = true).toList()
 
-    override suspend fun ownedProductIds(): Set<String> {
+    override suspend fun ownedProductIds(): Set<String> = queryOwned(acknowledge = false)
+
+    /**
+     * Queries the PURCHASED non-consumables. When [acknowledge] (the IAP-3 restore path), also
+     * re-acknowledges any purchased-but-unacknowledged entitlement so Play finalizes it.
+     */
+    private suspend fun queryOwned(acknowledge: Boolean): Set<String> {
         if (!ensureConnected()) return emptySet()
         val params = QueryPurchasesParams.newBuilder()
             .setProductType(BillingClient.ProductType.INAPP)
@@ -174,10 +187,10 @@ private class AndroidBillingProvider(private val context: Context) : BillingProv
                         if (cont.isActive) cont.resume(emptySet())
                         return@queryPurchasesAsync
                     }
-                    val owned = purchases
+                    val purchased = purchases
                         .filter { it.purchaseState == Purchase.PurchaseState.PURCHASED }
-                        .flatMap { it.products }
-                        .toSet()
+                    if (acknowledge) purchased.forEach { acknowledgeIfNeeded(it) }
+                    val owned = purchased.flatMap { it.products }.toSet()
                     if (cont.isActive) cont.resume(owned)
                 }
             }.onFailure { if (cont.isActive) cont.resume(emptySet()) }

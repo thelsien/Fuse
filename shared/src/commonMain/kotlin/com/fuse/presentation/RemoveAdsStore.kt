@@ -49,6 +49,15 @@ import kotlinx.coroutines.launch
  * fire-once "Purchased!"/"Cancelled"/"Failed" snackbar that never re-shows on recomposition —
  * mirroring [GameEffect]/[DailyEffect].
  *
+ * ## IAP-3 — restore
+ * [restore] is the store-review-mandated "Restore Purchases" action (the button lives in the IAP-4
+ * paywall). It asks the store what the signed-in account already owns ([BillingProvider.restore]) and,
+ * if `remove_ads` is among them, re-grants the entitlement via the SAME ownership/grant path purchase
+ * uses (`owned` false → true → [onOwned] → `grantRemoveAds`), so a FRESH INSTALL whose local
+ * entitlement cache is `false` is re-entitled from the store with no purchase. Its outcome is a
+ * [RestoreResult] emitted once on [restoreOutcomes] (separate from purchase [outcomes] so IAP-4 can
+ * label "Purchases restored" / "Nothing to restore" / "Restore failed" distinctly).
+ *
  * ## Async off the UI (injected scope)
  * The provider calls suspend (network/store round-trip), so the non-suspend [refresh]/[purchase]
  * launch onto an injected [scope] (the Koin singleton passes a long-lived app scope on
@@ -95,6 +104,15 @@ class RemoveAdsStore(
 
     /** One-shot purchase outcomes (consume once). Hot, non-replaying. */
     val outcomes: Flow<PurchaseResult> = _outcomes.asSharedFlow()
+
+    private val _restoreOutcomes = MutableSharedFlow<RestoreResult>(
+        replay = 0,
+        extraBufferCapacity = 8,
+        onBufferOverflow = BufferOverflow.DROP_OLDEST,
+    )
+
+    /** IAP-3: one-shot restore outcomes (consume once). Hot, non-replaying. */
+    val restoreOutcomes: Flow<RestoreResult> = _restoreOutcomes.asSharedFlow()
 
     init {
         if (refreshOnInit) refresh()
@@ -152,6 +170,57 @@ class RemoveAdsStore(
             if (nowOwned && !wasOwned) onOwned()
         }
     }
+
+    /**
+     * IAP-3 — the store-review-mandated **Restore Purchases** action (the button lives in IAP-4).
+     * Asks the store what this account already owns ([BillingProvider.restore]) off the UI via
+     * [scope]. GUARDED: a no-op when a restore OR a purchase is already in flight, so a double-tap
+     * makes a single provider call. Outcomes (emitted once on [restoreOutcomes]):
+     *  - `remove_ads` owned per the store → sets `owned = true`, which fires the SAME [onOwned]
+     *    ([com.fuse.ads.PersistedEntitlements.grantRemoveAds]) purchase uses on the `false → true`
+     *    transition (persist + suppress interstitials, surviving relaunch). This is the FRESH-INSTALL
+     *    re-grant: the local entitlement cache may be `false`, the store still reports ownership, and
+     *    restore re-entitles. Emits [RestoreResult.Restored].
+     *  - store reports it un-owned → `owned` left unchanged, emits [RestoreResult.NothingToRestore].
+     * The provider never throws (empty list on any failure), so a store/network error surfaces as
+     * [RestoreResult.NothingToRestore]; an unexpected error is caught and emits [RestoreResult.Failed].
+     * Never throws.
+     */
+    fun restore() {
+        if (_state.value.restoreInProgress || _state.value.purchaseInProgress) return
+        _state.value = _state.value.copy(restoreInProgress = true)
+        scope.launch {
+            val result = try {
+                val owned = Iap.PRODUCT_REMOVE_ADS in billing.restore()
+                val wasOwned = _state.value.owned
+                val nowOwned = wasOwned || owned
+                _state.value = _state.value.copy(owned = nowOwned)
+                // Reuse the purchase grant path: grant once on the false → true transition.
+                if (nowOwned && !wasOwned) onOwned()
+                if (owned) RestoreResult.Restored else RestoreResult.NothingToRestore
+            } catch (e: Throwable) {
+                RestoreResult.Failed
+            }
+            _state.value = _state.value.copy(restoreInProgress = false)
+            _restoreOutcomes.tryEmit(result)
+        }
+    }
+}
+
+/**
+ * IAP-3 — the coarse outcome of [RemoveAdsStore.restore], emitted once on
+ * [RemoveAdsStore.restoreOutcomes] so the paywall (IAP-4) can show a fire-once snackbar. Kept as an
+ * `enum` so it crosses the Kotlin/Native bridge cleanly, mirroring [PurchaseResult].
+ */
+enum class RestoreResult {
+    /** The store reported `remove_ads` owned; the entitlement was (re-)granted. */
+    Restored,
+
+    /** The store reported nothing to restore (or a graceful store/network failure). */
+    NothingToRestore,
+
+    /** An unexpected error occurred while restoring. Graceful — the entitlement is untouched. */
+    Failed,
 }
 
 /**
@@ -162,6 +231,7 @@ class RemoveAdsStore(
  * @property owned whether `remove_ads` is currently owned (in-memory; IAP-2 persists this).
  * @property loading a product/ownership [RemoveAdsStore.refresh] is in flight.
  * @property purchaseInProgress a [RemoveAdsStore.purchase] is in flight (disable the CTA).
+ * @property restoreInProgress a [RemoveAdsStore.restore] is in flight (disable the Restore button).
  * @property lastResult the most recent purchase outcome, or `null` before any attempt (sticky label).
  */
 data class RemoveAdsUiState(
@@ -169,6 +239,7 @@ data class RemoveAdsUiState(
     val owned: Boolean = false,
     val loading: Boolean = false,
     val purchaseInProgress: Boolean = false,
+    val restoreInProgress: Boolean = false,
     val lastResult: PurchaseResult? = null,
 ) {
     /**
@@ -176,7 +247,15 @@ data class RemoveAdsUiState(
      * purchase is in flight. IAP-4 reads this to enable/disable the buy button.
      */
     val canPurchase: Boolean
-        get() = product != null && !owned && !purchaseInProgress
+        get() = product != null && !owned && !purchaseInProgress && !restoreInProgress
+
+    /**
+     * Whether the Restore button can be offered (IAP-3): not already owned and no
+     * purchase/restore in flight. Available even when `product == null` so a returning owner on a
+     * fresh install (where the store may report no live product) can still restore.
+     */
+    val canRestore: Boolean
+        get() = !owned && !purchaseInProgress && !restoreInProgress
 
     /** The localized price to render, or `null` when no product is available. Never reformatted. */
     val price: String?
