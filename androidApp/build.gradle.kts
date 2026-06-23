@@ -22,7 +22,9 @@ android {
     compileSdk = libs.versions.android.compileSdk.get().toInt()
 
     defaultConfig {
-        applicationId = "com.fuse.android"
+        // Published app/package id used by Play Console. Intentionally differs from `namespace`
+        // (com.fuse.android), which stays the internal R/BuildConfig + MainActivity package.
+        applicationId = "com.thelsien.fuse"
         minSdk = libs.versions.android.minSdk.get().toInt()
         targetSdk = libs.versions.android.targetSdk.get().toInt()
         versionCode = 1
