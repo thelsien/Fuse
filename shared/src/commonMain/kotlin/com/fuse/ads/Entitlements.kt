@@ -1,5 +1,11 @@
 package com.fuse.ads
 
+import com.fuse.data.EntitlementsRepository
+import com.fuse.data.NoOpEntitlementsRepository
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+
 /**
  * ADS-4 (Sprint 8) — the Remove-Ads ENTITLEMENT seam (a HOOK, not an implementation).
  *
@@ -40,3 +46,55 @@ object NoOpEntitlements : Entitlements {
  * controller test assert the hook is actually consulted.
  */
 class FakeEntitlements(override val removeAdsOwned: Boolean) : Entitlements
+
+/**
+ * IAP-2 (Sprint 9) — the REAL, persisted [Entitlements] that replaces [NoOpEntitlements] in Koin.
+ *
+ * It backs the single [removeAdsOwned] gate the interstitial reads with a persisted boolean cache
+ * ([EntitlementsRepository], key `fuse.entitlement.removeAds`):
+ *  - **Seeded on construction** from the repo, so the entitlement SURVIVES RELAUNCH and is available
+ *    INSTANTLY and OFFLINE (no store round-trip needed for the gate). A returning owner's
+ *    interstitials stay suppressed from the first frame.
+ *  - **[grantRemoveAds]** flips the cached flag to `true` AND persists it (write-through). It is
+ *    IDEMPOTENT (granting twice is a no-op on an already-owned entitlement and does not re-emit). This
+ *    is the single grant path called by (a) the seed-on-launch reconcile with the store
+ *    ([com.fuse.iap.BillingProvider.ownedProductIds] in `initKoin`), (b) a successful purchase
+ *    ([com.fuse.presentation.RemoveAdsStore] observing `owned`), and (c) IAP-3's restore (reusing
+ *    this same method) — so all three converge on one persisted source of truth.
+ *
+ * The value lives in a [MutableStateFlow] so the paywall (IAP-4) / UI can REACT to ownership via
+ * [removeAdsOwnedFlow]; the synchronous [removeAdsOwned] bool the ad sites read is just its current
+ * value, so [InterstitialController] / [InterstitialPolicy] are completely UNCHANGED. The entitlement
+ * never gates rewarded ads (ADS-2 revive / ADS-3 streak-saver) — those code paths never consult
+ * [Entitlements] at all.
+ *
+ * Once granted it stays granted for the process; we do not auto-revoke (a refund is rare and the
+ * store-reconcile on the NEXT launch is the authoritative correction).
+ *
+ * `single` in Koin (one shared, persisted entitlement). Default repo is [NoOpEntitlementsRepository]
+ * for previews/tests that don't supply persistence (then it behaves like the always-false NoOp).
+ */
+class PersistedEntitlements(
+    private val repository: EntitlementsRepository = NoOpEntitlementsRepository,
+) : Entitlements {
+
+    private val _removeAdsOwned = MutableStateFlow(repository.loadRemoveAdsOwned())
+
+    /** Reactive view of ownership for the paywall (IAP-4) / UI. */
+    val removeAdsOwnedFlow: StateFlow<Boolean> = _removeAdsOwned.asStateFlow()
+
+    /** The gate the interstitial reads — the current value of [removeAdsOwnedFlow]. */
+    override val removeAdsOwned: Boolean
+        get() = _removeAdsOwned.value
+
+    /**
+     * Grants the Remove-Ads entitlement: flips [removeAdsOwned] true and PERSISTS it. Idempotent — a
+     * no-op (no persist, no re-emit) if already owned. The single grant path shared by purchase,
+     * seed-on-launch reconcile, and IAP-3 restore.
+     */
+    fun grantRemoveAds() {
+        if (_removeAdsOwned.value) return
+        _removeAdsOwned.value = true
+        repository.saveRemoveAdsOwned(true)
+    }
+}

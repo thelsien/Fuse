@@ -69,6 +69,31 @@ class InterstitialControllerTest {
     }
 
     @Test
+    fun persistedEntitlementGrantSuppressesInterstitialAcrossRelaunch() {
+        // IAP-2 end-to-end: the REAL persisted entitlement, granted (e.g. via a purchase), suppresses
+        // the would-be-show 3rd replay — and a fresh entitlement seeded from the same store (a
+        // relaunch) stays suppressed.
+        val s = settings()
+        val entitlementSettings = com.russhwolf.settings.MapSettings()
+        val entitlements = PersistedEntitlements(
+            repository = com.fuse.data.SettingsEntitlementsRepository(entitlementSettings),
+        )
+        entitlements.grantRemoveAds()
+
+        val c = InterstitialController(
+            repository = SettingsAdsRepository(s),
+            entitlements = entitlements,
+        )
+        repeat(3) { assertFalse(c.onReplay(), "granted entitlement suppresses the interstitial") }
+
+        // "Relaunch": a fresh PersistedEntitlements seeded from the same store is still owned.
+        val reloaded = PersistedEntitlements(
+            repository = com.fuse.data.SettingsEntitlementsRepository(entitlementSettings),
+        )
+        assertTrue(reloaded.removeAdsOwned, "entitlement survives relaunch → still suppressed")
+    }
+
+    @Test
     fun defaultEntitlementFalseDoesNotSuppress() {
         // Default NoOpEntitlements (removeAdsOwned=false) must NOT suppress the cadence on its own.
         val s = settings()

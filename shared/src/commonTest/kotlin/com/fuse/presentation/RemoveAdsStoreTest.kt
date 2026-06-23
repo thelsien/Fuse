@@ -199,6 +199,93 @@ class RemoveAdsStoreTest {
         assertEquals(PurchaseResult.AlreadyOwned, state.lastResult)
     }
 
+    // --- IAP-2: onOwned grant wiring -------------------------------------------
+
+    private fun TestScope.store(
+        billing: com.fuse.iap.BillingProvider,
+        onOwned: () -> Unit,
+        refreshOnInit: Boolean = true,
+    ): RemoveAdsStore = RemoveAdsStore(
+        billing = billing,
+        scope = this,
+        onOwned = onOwned,
+        refreshOnInit = refreshOnInit,
+    )
+
+    @Test
+    fun purchasedFiresOnOwnedOnceForTheEntitlementGrant() = runTest {
+        val billing = FakeBillingProvider().apply {
+            scriptPurchase(Iap.PRODUCT_REMOVE_ADS, PurchaseResult.Purchased)
+        }
+        var grants = 0
+        val store = store(billing, onOwned = { grants++ })
+        advanceUntilIdle()
+        assertEquals(0, grants, "no grant before purchase")
+
+        store.purchase()
+        advanceUntilIdle()
+
+        assertTrue(store.state.value.owned)
+        assertEquals(1, grants, "a successful purchase grants exactly once (false → true)")
+    }
+
+    @Test
+    fun alreadyOwnedPurchaseFiresOnOwned() = runTest {
+        val billing = FakeBillingProvider().apply { owned += Iap.PRODUCT_REMOVE_ADS }
+        var grants = 0
+        // refreshOnInit=false so the grant comes from the purchase() AlreadyOwned path, not refresh.
+        val store = store(billing, onOwned = { grants++ }, refreshOnInit = false)
+
+        store.purchase()
+        advanceUntilIdle()
+
+        assertEquals(PurchaseResult.AlreadyOwned, store.state.value.lastResult)
+        assertEquals(1, grants, "AlreadyOwned also grants the entitlement")
+    }
+
+    @Test
+    fun refreshThatDiscoversOwnershipFiresOnOwned() = runTest {
+        // A returning owner: the store is owned per the provider on the very first refresh.
+        val billing = FakeBillingProvider().apply { owned += Iap.PRODUCT_REMOVE_ADS }
+        var grants = 0
+        val store = store(billing, onOwned = { grants++ })
+        advanceUntilIdle()
+
+        assertTrue(store.state.value.owned)
+        assertEquals(1, grants, "a refresh that finds ownership grants once")
+    }
+
+    @Test
+    fun cancelledPurchaseDoesNotFireOnOwned() = runTest {
+        val billing = FakeBillingProvider().apply {
+            scriptPurchase(Iap.PRODUCT_REMOVE_ADS, PurchaseResult.Cancelled)
+        }
+        var grants = 0
+        val store = store(billing, onOwned = { grants++ })
+        advanceUntilIdle()
+
+        store.purchase()
+        advanceUntilIdle()
+
+        assertFalse(store.state.value.owned)
+        assertEquals(0, grants, "a cancelled purchase never grants")
+    }
+
+    @Test
+    fun onOwnedFiresOnlyOnceAcrossRefreshThenPurchase() = runTest {
+        // Already owned, refreshOnInit=true: refresh grants once; a later (redundant) purchase
+        // observes owned was already true and does NOT re-grant.
+        val billing = FakeBillingProvider().apply { owned += Iap.PRODUCT_REMOVE_ADS }
+        var grants = 0
+        val store = store(billing, onOwned = { grants++ })
+        advanceUntilIdle()
+        assertEquals(1, grants)
+
+        store.purchase()
+        advanceUntilIdle()
+        assertEquals(1, grants, "ownership already observed → no second grant")
+    }
+
     @Test
     fun doublePurchaseIsGuardedToASingleProviderCall() = runTest {
         val billing = FakeBillingProvider().apply {
