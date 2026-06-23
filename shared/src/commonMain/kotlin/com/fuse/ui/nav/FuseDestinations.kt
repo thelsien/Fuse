@@ -25,4 +25,7 @@ object FuseDestinations {
 
     /** COS-3 — the cosmetics Collection screen ([com.fuse.ui.collection.CollectionScreen]). */
     const val COLLECTION: String = "collection"
+
+    /** IAP-4 — the Remove-Ads paywall ([com.fuse.ui.iap.RemoveAdsScreen]); reached from Settings. */
+    const val REMOVE_ADS: String = "remove_ads"
 }

@@ -154,6 +154,7 @@ class AppNavigationUiTest {
                     onToggleReducedMotion = {},
                     onToggleColorblind = {},
                     onBack = { navController.popBackStack() },
+                    onOpenRemoveAds = {},
                 )
             }
         }

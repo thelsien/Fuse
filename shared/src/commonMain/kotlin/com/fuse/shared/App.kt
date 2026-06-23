@@ -22,6 +22,7 @@ import com.fuse.ui.collection.CollectionScreen
 import com.fuse.ui.daily.DailyScreen
 import com.fuse.ui.game.GameScreen
 import com.fuse.ui.home.HomeScreen
+import com.fuse.ui.iap.RemoveAdsScreen
 import com.fuse.ui.nav.FuseDestinations
 import com.fuse.ui.settings.SettingsScreen
 import com.fuse.cosmetics.CosmeticType
@@ -229,7 +230,19 @@ private fun AppShell(
             )
         }
         composable(FuseDestinations.SETTINGS) {
+            // SHL-3 settings. IAP-4 — the "Remove Ads" entry navigates to the real paywall
+            // (REMOVE_ADS), replacing IAP-0's debug spike row.
             SettingsScreen(
+                onBack = { navController.popBackStack() },
+                onOpenRemoveAds = { navController.navigate(FuseDestinations.REMOVE_ADS) },
+                modifier = Modifier.fillMaxSize(),
+            )
+        }
+        composable(FuseDestinations.REMOVE_ADS) {
+            // IAP-4 — the Remove-Ads paywall. The shared RemoveAdsStore (Koin singleton) resolves the
+            // localized product + ownership and runs Buy/Restore (flipping the persisted entitlement
+            // on success — IAP-2/3). Back pops to Settings (system back on Android; "‹ Settings" on iOS).
+            RemoveAdsScreen(
                 onBack = { navController.popBackStack() },
                 modifier = Modifier.fillMaxSize(),
             )

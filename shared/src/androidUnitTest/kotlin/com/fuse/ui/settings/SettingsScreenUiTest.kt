@@ -8,6 +8,7 @@ import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.runComposeUiTest
 import com.fuse.ads.NoOpAdProvider
 import com.fuse.iap.NoOpBillingProvider
+import com.fuse.presentation.RemoveAdsStore
 import com.fuse.feedback.ColorblindSettings
 import com.fuse.feedback.HapticsCoordinator
 import com.fuse.feedback.HapticsSettings
@@ -15,6 +16,9 @@ import com.fuse.feedback.Haptics
 import com.fuse.feedback.ReducedMotionSettings
 import com.fuse.feedback.SoundSettings
 import com.fuse.ui.theme.FuseTheme
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
@@ -37,10 +41,22 @@ import org.robolectric.annotation.GraphicsMode
  *    restart). The reduced-motion live-theme chain is proven separately by
  *    `ReducedMotionSwitchUiTest`; here we also assert reduced-motion's holder flips live.
  */
+@OptIn(ExperimentalCoroutinesApi::class)
 @RunWith(RobolectricTestRunner::class)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
 @Config(sdk = [34])
 class SettingsScreenUiTest {
+
+    /**
+     * IAP-4 — a [RemoveAdsStore] over [NoOpBillingProvider] for the stateful-wrapper tests (no
+     * Koin). `refreshOnInit = false` so no provider round-trip is needed; the "Remove Ads" entry
+     * just reads `owned` (false here).
+     */
+    private fun testRemoveAdsStore(): RemoveAdsStore = RemoveAdsStore(
+        billing = NoOpBillingProvider,
+        scope = CoroutineScope(UnconfinedTestDispatcher()),
+        refreshOnInit = false,
+    )
 
     /** A recording [Haptics] so we can prove the live-mute end to end. */
     private class RecordingHaptics : Haptics {
@@ -65,6 +81,7 @@ class SettingsScreenUiTest {
                     onToggleReducedMotion = {},
                     onToggleColorblind = {},
                     onBack = {},
+                    onOpenRemoveAds = {},
                 )
             }
         }
@@ -96,6 +113,7 @@ class SettingsScreenUiTest {
                     onToggleReducedMotion = { reducedMotion = it },
                     onToggleColorblind = { colorblind = it },
                     onBack = {},
+                    onOpenRemoveAds = {},
                 )
             }
         }
@@ -121,6 +139,7 @@ class SettingsScreenUiTest {
                     sound = true, haptics = true, reducedMotion = false, colorblind = false,
                     onToggleSound = {}, onToggleHaptics = {}, onToggleReducedMotion = {},
                     onToggleColorblind = {}, onBack = { backs++ },
+                    onOpenRemoveAds = {},
                 )
             }
         }
@@ -141,6 +160,7 @@ class SettingsScreenUiTest {
             FuseTheme {
                 SettingsScreen(
                     onBack = {},
+                    onOpenRemoveAds = {},
                     soundSettings = sound,
                     hapticsSettings = haptics,
                     reducedMotionSettings = reducedMotion,
@@ -148,9 +168,9 @@ class SettingsScreenUiTest {
                     // ADS-0: the stateful wrapper now resolves an AdProvider for the debug ad
                     // trigger; supply the NoOp default here so the test stays Koin-free.
                     adProvider = NoOpAdProvider,
-                    // IAP-0: the wrapper also resolves a BillingProvider for the debug billing
-                    // trigger; supply the NoOp default so the test stays Koin-free.
-                    billingProvider = NoOpBillingProvider,
+                    // IAP-4: the wrapper resolves the RemoveAdsStore for the "Remove Ads" entry's
+                    // owned state; supply one over NoOpBillingProvider so the test stays Koin-free.
+                    removeAdsStore = testRemoveAdsStore(),
                 )
             }
         }
@@ -184,14 +204,15 @@ class SettingsScreenUiTest {
             FuseTheme {
                 SettingsScreen(
                     onBack = {},
+                    onOpenRemoveAds = {},
                     soundSettings = SoundSettings(),
                     hapticsSettings = haptics,
                     reducedMotionSettings = ReducedMotionSettings(),
                     colorblindSettings = ColorblindSettings(),
                     // ADS-0: supply the NoOp AdProvider so the stateful wrapper stays Koin-free here.
                     adProvider = NoOpAdProvider,
-                    // IAP-0: likewise the NoOp BillingProvider.
-                    billingProvider = NoOpBillingProvider,
+                    // IAP-4: likewise a RemoveAdsStore over NoOpBillingProvider.
+                    removeAdsStore = testRemoveAdsStore(),
                 )
             }
         }
