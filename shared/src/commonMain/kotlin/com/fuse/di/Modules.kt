@@ -12,8 +12,13 @@ import com.fuse.data.SettingsCosmeticsRepository
 import com.fuse.data.SettingsDailyRepository
 import com.fuse.data.SettingsDailyStreakRepository
 import com.fuse.data.SettingsGameRepository
+import com.fuse.data.AdsRepository
+import com.fuse.data.SettingsAdsRepository
 import com.fuse.data.platformSettingsModule
 import com.fuse.ads.AdManager
+import com.fuse.ads.Entitlements
+import com.fuse.ads.InterstitialController
+import com.fuse.ads.NoOpEntitlements
 import com.fuse.ads.platformAdsModule
 import com.fuse.daily.DailyClock
 import com.fuse.daily.SystemDailyClock
@@ -87,6 +92,12 @@ val dataModule: Module = module {
     // COS-1: the player's EQUIPPED cosmetics (the only persisted cosmetics choice; owned is
     // DERIVED from achievements). Own key (fuse.cosmetics.equipped).
     single<CosmeticsRepository> { SettingsCosmeticsRepository(get()) }
+    // ADS-4: the Classic game-over interstitial's persisted cap state (replay counter) + the
+    // first-session launch marker — over the SAME platform `Settings`, under its OWN keys
+    // (fuse.ads.interstitial / fuse.ads.launchCount). Survives relaunch so the every-Nth cap is
+    // real, and the launch counter (advanced once at app start in initKoin) drives first-session
+    // suppression. Read by [InterstitialController].
+    single<AdsRepository> { SettingsAdsRepository(get()) }
 }
 
 /** Domain layer — use cases. Sample use case consuming the data abstraction. */
@@ -102,6 +113,16 @@ val presentationModule: Module = module {
     // cache). ADS-2 wires this into GameScreen's game-over revive: a verified rewarded completion
     // (showRewarded() → AdResult.isRewardEarned) grants GameIntent.Revive. ADS-3/4 reuse it.
     single { AdManager(provider = get()) }
+    // ADS-4 — the Remove-Ads ENTITLEMENT hook the game-over interstitial is gated on. Always-false
+    // [NoOpEntitlements] until IAP-2 (Sprint 9) replaces this binding with real purchase state; from
+    // that moment interstitials are suppressed for entitled players (rewarded ADS-2/3 stay ungated).
+    single<Entitlements> { NoOpEntitlements }
+    // ADS-4 — the count/persist/decide glue between the lose-overlay "Restart" tap and the pure
+    // InterstitialPolicy. `single` (one shared, stateful cadence). GameScreen calls onReplay() once
+    // per game-over → replay; if it returns true the UI shows adManager.showInterstitial() THEN
+    // restarts (replay never blocked by an ad). Reads the persisted cap state + first-session marker
+    // ([AdsRepository]) and the Remove-Ads hook ([Entitlements]).
+    single { InterstitialController(repository = get(), entitlements = get()) }
     // UIB-3/UIB-6: the game's MVI store. `single` — it holds the live GameState, so the
     // whole app shares one game instance. The store takes the [GameRepository] so it
     // loads any saved game/best on init (resume) and persists after every change.
