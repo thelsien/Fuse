@@ -8,6 +8,8 @@ import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.runComposeUiTest
 import androidx.compose.ui.test.swipeLeft
 import androidx.compose.ui.test.swipeRight
+import com.fuse.ads.AdManager
+import com.fuse.ads.NoOpAdProvider
 import com.fuse.engine.Board
 import com.fuse.engine.GamePhase
 import com.fuse.engine.GameState
@@ -98,7 +100,7 @@ class GameOverlaysUiTest {
                 score = Score(current = 1234L, best = 1234L),
             ),
         )
-        setContent { FuseTheme { GameScreen(store = store, haptics = testHaptics(), sound = testSound(), achievements = AchievementsStore()) } }
+        setContent { FuseTheme { GameScreen(store = store, haptics = testHaptics(), sound = testSound(), achievements = AchievementsStore(), adManager = AdManager(NoOpAdProvider)) } }
 
         // Lose overlay is up with the final score; best preserved.
         onNodeWithTag(GameOverlayTags.LOSE_ROOT).assertExists()
@@ -120,7 +122,7 @@ class GameOverlaysUiTest {
     @Test
     fun winOverlayShowsOnceAndKeepGoingContinuesPlay() = runComposeUiTest {
         val store = GameStore.forState(stateFromBoard(nearWinBoard()))
-        setContent { FuseTheme { GameScreen(store = store, haptics = testHaptics(), sound = testSound(), achievements = AchievementsStore()) } }
+        setContent { FuseTheme { GameScreen(store = store, haptics = testHaptics(), sound = testSound(), achievements = AchievementsStore(), adManager = AdManager(NoOpAdProvider)) } }
 
         // Not won yet.
         onNodeWithTag(GameOverlayTags.WIN_ROOT).assertDoesNotExist()
@@ -158,7 +160,7 @@ class GameOverlaysUiTest {
     @Test
     fun winOverlayRestartStartsNewGame() = runComposeUiTest {
         val store = GameStore.forState(stateFromBoard(nearWinBoard()))
-        setContent { FuseTheme { GameScreen(store = store, haptics = testHaptics(), sound = testSound(), achievements = AchievementsStore()) } }
+        setContent { FuseTheme { GameScreen(store = store, haptics = testHaptics(), sound = testSound(), achievements = AchievementsStore(), adManager = AdManager(NoOpAdProvider)) } }
 
         onNodeWithTag(GameScreenTags.BOARD).performTouchInput { swipeLeft() }
         waitForIdle()
