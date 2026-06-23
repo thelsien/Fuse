@@ -2,9 +2,11 @@ package com.fuse.presentation
 
 import com.fuse.daily.DailyClock
 import com.fuse.daily.DailyStreak
+import com.fuse.daily.canRestore
 import com.fuse.daily.dailyDayNumber
 import com.fuse.daily.liveCurrent
 import com.fuse.daily.recordCompletion
+import com.fuse.daily.restore
 import com.fuse.data.DailyStreakRepository
 import com.fuse.data.NoOpDailyStreakRepository
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -68,12 +70,35 @@ class DailyStreakStore(
         _state.value = project()
     }
 
+    /**
+     * ADS-3 (streak-saver) — "saves" a BROKEN daily streak (the player missed a day): load-fresh →
+     * [restore] → save → republish. The UI calls this ONLY after a verified rewarded ad completion
+     * (the ad is orchestrated in `DailyScreen`, mirroring ADS-2's revive — the store stays sync/pure
+     * and grants the save only when asked).
+     *
+     * No-op when the streak is not restorable ([DailyStreak.canRestore] is false — alive, already
+     * solved today, or never played) and naturally idempotent: after a successful restore the streak
+     * is alive again (`canRestore` false), so a second call (or a re-tap) does nothing. Reflected in
+     * [state] via [DailyStreakState.canRestore], which the prompt observes.
+     */
+    fun restore() {
+        val today = dailyDayNumber(clock.todayUtc())
+        streak = repository.loadStreak().restore(today)
+        repository.saveStreak(streak)
+        _state.value = project()
+    }
+
     /** Projects the stored [streak] into its displayable form against today's day number. */
     private fun project(): DailyStreakState {
         val today = dailyDayNumber(clock.todayUtc())
+        val canRestore = streak.canRestore(today)
         return DailyStreakState(
             current = streak.liveCurrent(today),
             longest = streak.longest,
+            canRestore = canRestore,
+            // The length of the broken streak that a restore would rescue (the stored `current`
+            // before the gap). Only meaningful when `canRestore`; `0` otherwise.
+            restorableLength = if (canRestore) streak.current else 0,
         )
     }
 }
@@ -84,8 +109,16 @@ class DailyStreakStore(
  * @property current the CURRENT streak to display — `liveCurrent(today)`, i.e. `0` once a
  *   day has been missed (the streak is broken) and the consecutive-day count otherwise.
  * @property longest the best streak ever achieved (all-time), never decreasing.
+ * @property canRestore ADS-3 — whether a broken-but-non-empty streak can be RESTORED via a
+ *   rewarded ad right now (had a streak AND it's now broken). Drives the streak-saver prompt on
+ *   `DailyScreen`; goes `false` once restored (natural idempotency) or when the streak is alive.
+ * @property restorableLength ADS-3 — the length of the broken streak a restore would rescue (the
+ *   stored consecutive-day count before the missed day); only meaningful when [canRestore], else
+ *   `0`. Used by the prompt copy ("Your N-day streak broke…") since [current] is `0` while broken.
  */
 data class DailyStreakState(
     val current: Int = 0,
     val longest: Int = 0,
+    val canRestore: Boolean = false,
+    val restorableLength: Int = 0,
 )

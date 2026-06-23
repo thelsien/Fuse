@@ -103,3 +103,40 @@ fun DailyStreak.liveCurrent(today: Long): Int {
     val last = lastCompletedDay ?: return 0
     return if (last == today || last == today - 1) current else 0
 }
+
+/**
+ * ADS-3 (streak-saver) — whether a BROKEN-but-non-empty streak can be RESTORED via a rewarded ad.
+ *
+ * True only when there genuinely WAS a streak and it is now broken:
+ *  - [current] `> 0` (a real streak existed), AND
+ *  - [lastCompletedDay] `!= null` (the Daily has been played), AND
+ *  - [liveCurrent]`(today) == 0` (last completion is older than yesterday — a day was missed).
+ *
+ * False in every other case — abuse-guarded by construction:
+ *  - the streak is still ALIVE (solved today, or yesterday so still extendable) → `liveCurrent > 0`;
+ *  - the day was already SOLVED today → alive → no break to save;
+ *  - NEVER PLAYED (`lastCompletedDay == null`, `current == 0`) → nothing to restore.
+ *
+ * ## Natural idempotency
+ * After a successful [restore], `liveCurrent(today) > 0` (the gap is bridged), so `canRestore`
+ * becomes `false` and the same break can't be restored again — no separate guard field is needed.
+ */
+fun DailyStreak.canRestore(today: Long): Boolean =
+    current > 0 && lastCompletedDay != null && liveCurrent(today) == 0
+
+/**
+ * ADS-3 (streak-saver) — "saves" a broken streak by BRIDGING the gap to yesterday, so it goes
+ * live again and solving [today] CONTINUES it (rather than restarting at 1).
+ *
+ * When [canRestore]`(today)`, this sets `lastCompletedDay = today - 1` (keeping [current] and
+ * [longest] unchanged). The effect: [liveCurrent]`(today)` becomes [current] again (the streak is
+ * alive and extendable), and a subsequent `recordCompletion(today)` is treated as CONSECUTIVE
+ * (`today == (today - 1) + 1`) → [current]`+ 1`. Restore does NOT itself increment the streak —
+ * it merely rescues it; solving today is what extends it.
+ *
+ * When NOT [canRestore] (alive, already solved today, or never played), returns `this` unchanged
+ * (a no-op). Because a successful restore makes `canRestore` false, a SECOND `restore` is also a
+ * no-op — the same break can only be saved once (natural idempotency; see [canRestore]).
+ */
+fun DailyStreak.restore(today: Long): DailyStreak =
+    if (canRestore(today)) copy(lastCompletedDay = today - 1) else this

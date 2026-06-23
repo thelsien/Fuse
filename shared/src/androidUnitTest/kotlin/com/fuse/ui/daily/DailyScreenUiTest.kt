@@ -9,6 +9,8 @@ import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.runComposeUiTest
 import androidx.compose.ui.test.swipeLeft
+import com.fuse.ads.AdManager
+import com.fuse.ads.FakeAdProvider
 import com.fuse.daily.DailyPuzzle
 import com.fuse.daily.Sharer
 import com.fuse.engine.Board
@@ -70,6 +72,9 @@ class DailyScreenUiTest {
     /** A streak store with the NoOp repo default — records a fresh streak (1) on solve. */
     private fun streakStore() = DailyStreakStore(clock = FixedClock(LocalDate(2026, 6, 21)))
 
+    /** An AdManager over a NoOp-fill fake — these DLY tests never exercise the streak-saver ad. */
+    private fun noAdsManager() = AdManager(FakeAdProvider(loadSucceeds = false))
+
     private fun unsolvedState() = DailyUiState(
         board = trivialPuzzle().startBoard,
         moveCount = 3,
@@ -108,7 +113,7 @@ class DailyScreenUiTest {
     @Test
     fun aSwipeThatChangesBoardUpdatesTheCounter() = runComposeUiTest {
         val store = trivialStore()
-        setContent { FuseTheme { DailyScreen(store = store, streakStore = streakStore(), sharer = FakeSharer()) } }
+        setContent { FuseTheme { DailyScreen(store = store, streakStore = streakStore(), sharer = FakeSharer(), adManager = noAdsManager()) } }
 
         onNodeWithTag(DailyHudTags.MOVES).assertTextEquals("0")
         onNodeWithTag(DailyScreenTags.BOARD).performTouchInput { swipeLeft() }
@@ -136,7 +141,7 @@ class DailyScreenUiTest {
             par = 2,
         )
         val store = DailyStore(clock = FixedClock(LocalDate(2026, 6, 21)), puzzle = puzzle)
-        setContent { FuseTheme { DailyScreen(store = store, streakStore = streakStore(), sharer = FakeSharer()) } }
+        setContent { FuseTheme { DailyScreen(store = store, streakStore = streakStore(), sharer = FakeSharer(), adManager = noAdsManager()) } }
 
         onNodeWithTag(DailyScreenTags.BOARD).performTouchInput { swipeLeft() }
         waitForIdle()
@@ -167,7 +172,7 @@ class DailyScreenUiTest {
             par = 2,
         )
         val store = DailyStore(clock = FixedClock(LocalDate(2026, 6, 21)), puzzle = puzzle)
-        setContent { FuseTheme { DailyScreen(store = store, streakStore = streakStore(), sharer = FakeSharer()) } }
+        setContent { FuseTheme { DailyScreen(store = store, streakStore = streakStore(), sharer = FakeSharer(), adManager = noAdsManager()) } }
 
         onNodeWithTag(DailyScreenTags.BOARD).performTouchInput { swipeLeft() }
         waitForIdle()
@@ -182,7 +187,7 @@ class DailyScreenUiTest {
     @Test
     fun solvingShowsTheSolvedOverlay() = runComposeUiTest {
         val store = trivialStore()
-        setContent { FuseTheme { DailyScreen(store = store, streakStore = streakStore(), sharer = FakeSharer()) } }
+        setContent { FuseTheme { DailyScreen(store = store, streakStore = streakStore(), sharer = FakeSharer(), adManager = noAdsManager()) } }
         onNodeWithTag(DailyScreenTags.BOARD).performTouchInput { swipeLeft() }
         waitForIdle()
         onNodeWithTag(DailyScreenTags.SOLVED_OVERLAY).assertIsDisplayed()
@@ -244,7 +249,7 @@ class DailyScreenUiTest {
         val sharer = FakeSharer()
         val store = trivialStore() // target 32, par 1, day #N from the fixed 2026-06-21 clock.
         setContent {
-            FuseTheme { DailyScreen(store = store, streakStore = streakStore(), sharer = sharer) }
+            FuseTheme { DailyScreen(store = store, streakStore = streakStore(), sharer = sharer, adManager = noAdsManager()) }
         }
 
         onNodeWithTag(DailyScreenTags.BOARD).performTouchInput { swipeLeft() }
@@ -265,7 +270,7 @@ class DailyScreenUiTest {
         // DLY-5 end-to-end: a live solve drives the recorder (NoOp repo → fresh streak 1) and
         // the overlay shows it.
         val store = trivialStore()
-        setContent { FuseTheme { DailyScreen(store = store, streakStore = streakStore(), sharer = FakeSharer()) } }
+        setContent { FuseTheme { DailyScreen(store = store, streakStore = streakStore(), sharer = FakeSharer(), adManager = noAdsManager()) } }
         onNodeWithTag(DailyScreenTags.BOARD).performTouchInput { swipeLeft() }
         waitForIdle()
         onNodeWithTag(DailyScreenTags.SOLVED_STREAK).assertTextContains("Streak: 1", substring = true)

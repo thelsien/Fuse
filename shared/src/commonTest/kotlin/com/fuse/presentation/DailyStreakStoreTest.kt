@@ -19,6 +19,8 @@ import kotlinx.datetime.atStartOfDayIn
 import kotlin.time.Duration.Companion.hours
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
+import kotlin.test.assertTrue
 
 /**
  * DLY-5 — integration tests for [DailyStreakStore] over an in-memory [MapSettings] (so the
@@ -101,6 +103,85 @@ class DailyStreakStoreTest {
         store.recordSolved(dailyDayNumber(day1))
         store.recordSolved(dailyDayNumber(day1)) // idempotent
         assertEquals(1, store.state.value.current, "same-day re-record never double counts")
+    }
+
+    // ---- ADS-3 streak-saver: canRestore projection + restore() ----
+
+    /** Builds a BROKEN streak in [settings]: solve a 2-streak ending day2, observed on day4. */
+    private fun seedBrokenStreak(settings: Settings) {
+        DailyStreakStore(clock = FixedClock(day1), repository = streakRepo(settings))
+            .recordSolved(dailyDayNumber(day1))
+        DailyStreakStore(clock = FixedClock(day2), repository = streakRepo(settings))
+            .recordSolved(dailyDayNumber(day2)) // current 2, last = day2
+    }
+
+    @Test
+    fun canRestoreProjectionIsTrueWhenBrokenFalseWhenAlive() = runTest {
+        val settings = MapSettings()
+        seedBrokenStreak(settings)
+
+        // Day 4: day3 was skipped → broken → restorable.
+        val day4Store = DailyStreakStore(clock = FixedClock(day4), repository = streakRepo(settings))
+        assertEquals(0, day4Store.state.value.current, "broken → live current 0")
+        assertTrue(day4Store.state.value.canRestore, "broken-with-streak → canRestore")
+        assertEquals(2, day4Store.state.value.restorableLength, "the 2-day streak is rescuable")
+
+        // Day 3 (still alive: solved yesterday) → not restorable.
+        val day3Store = DailyStreakStore(clock = FixedClock(day3), repository = streakRepo(settings))
+        assertFalse(day3Store.state.value.canRestore, "alive (solved yesterday) → not restorable")
+    }
+
+    @Test
+    fun canRestoreProjectionIsFalseWhenNeverPlayed() = runTest {
+        val store = DailyStreakStore(clock = FixedClock(day1), repository = streakRepo(MapSettings()))
+        assertFalse(store.state.value.canRestore, "never played → nothing to restore")
+        assertEquals(0, store.state.value.restorableLength)
+    }
+
+    @Test
+    fun restoreAppliesPersistsAndRepublishesThenSolvingContinues() = runTest {
+        val settings = MapSettings()
+        seedBrokenStreak(settings)
+
+        val day4Store = DailyStreakStore(clock = FixedClock(day4), repository = streakRepo(settings))
+        assertTrue(day4Store.state.value.canRestore)
+
+        day4Store.restore()
+        // Republished: the streak is live again (2) and the offer is gone.
+        assertEquals(2, day4Store.state.value.current, "restored streak shows its value")
+        assertFalse(day4Store.state.value.canRestore, "offer disappears after restore")
+
+        // Persisted: a fresh store over the same settings (same day) sees the restored streak.
+        val reopened = DailyStreakStore(clock = FixedClock(day4), repository = streakRepo(settings))
+        assertEquals(2, reopened.state.value.current, "restore persisted across relaunch")
+        assertFalse(reopened.state.value.canRestore)
+
+        // And solving day4 CONTINUES the streak (2 → 3), not a reset to 1.
+        day4Store.recordSolved(dailyDayNumber(day4))
+        assertEquals(3, day4Store.state.value.current, "solving after a restore continues the streak")
+    }
+
+    @Test
+    fun restoreIsANoOpWhenNotRestorable() = runTest {
+        val settings = MapSettings()
+        // Alive streak (solved today) — restore must change nothing.
+        val store = DailyStreakStore(clock = FixedClock(day1), repository = streakRepo(settings))
+        store.recordSolved(dailyDayNumber(day1))
+        assertFalse(store.state.value.canRestore)
+        store.restore()
+        assertEquals(1, store.state.value.current, "restore on an alive streak is a no-op")
+        assertFalse(store.state.value.canRestore)
+    }
+
+    @Test
+    fun secondRestoreIsANoOp() = runTest {
+        val settings = MapSettings()
+        seedBrokenStreak(settings)
+        val store = DailyStreakStore(clock = FixedClock(day4), repository = streakRepo(settings))
+        store.restore()
+        val after = store.state.value
+        store.restore() // already alive → no-op
+        assertEquals(after, store.state.value, "a second restore changes nothing")
     }
 
     @Test

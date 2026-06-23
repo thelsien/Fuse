@@ -10,6 +10,8 @@ import androidx.compose.ui.test.runComposeUiTest
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
+import com.fuse.ads.AdManager
+import com.fuse.ads.NoOpAdProvider
 import com.fuse.daily.DailyClock
 import com.fuse.daily.DailyPuzzle
 import com.fuse.daily.NoOpSharer
@@ -86,6 +88,7 @@ class DailyNavigationUiTest {
                     store = store,
                     streakStore = DailyStreakStore(clock = FixedClock(LocalDate(2026, 6, 21))),
                     sharer = NoOpSharer,
+                    adManager = AdManager(NoOpAdProvider),
                     onBack = { navController.popBackStack() },
                 )
             }
