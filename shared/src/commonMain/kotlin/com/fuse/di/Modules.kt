@@ -23,6 +23,7 @@ import com.fuse.ads.InterstitialController
 import com.fuse.ads.PersistedEntitlements
 import com.fuse.ads.platformAdsModule
 import com.fuse.iap.platformBillingModule
+import com.fuse.analytics.platformAnalyticsModule
 import com.fuse.daily.DailyClock
 import com.fuse.daily.SystemDailyClock
 import com.fuse.daily.platformSharerModule
@@ -262,6 +263,12 @@ val appModules: List<Module> = listOf(
     // query + purchase the single `remove_ads` non-consumable (StoreKit 2 on iOS, Play Billing on
     // Android). Behind a flag; not wired into entitlements/ads (that's IAP-2) or a paywall (IAP-4).
     platformBillingModule,
+    // ANL-1 (Sprint 9) — the analytics seam (AnalyticsLogger expect/actual). Binds a
+    // DebugAnalyticsLogger on BOTH platforms (debug-verifiable in logcat / Xcode console, no SDK),
+    // satisfying "client analytics initialized on both platforms". Resolvable app-wide; ANL-2
+    // instruments game events at their call sites. The Firebase-later seam swaps the binding when
+    // the project/config exists — see [com.fuse.analytics.AnalyticsLogger] + docs/analytics/.
+    platformAnalyticsModule,
     dataModule,
     domainModule,
     presentationModule,
