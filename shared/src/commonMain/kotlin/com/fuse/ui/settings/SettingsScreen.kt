@@ -31,6 +31,9 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import com.fuse.ads.AdProvider
 import com.fuse.ads.AdsDebug
+import com.fuse.iap.BillingProvider
+import com.fuse.iap.Iap
+import com.fuse.iap.IapDebug
 import com.fuse.feedback.ColorblindSettings
 import com.fuse.feedback.HapticsSettings
 import com.fuse.feedback.ReducedMotionSettings
@@ -83,6 +86,7 @@ fun SettingsScreen(
     reducedMotionSettings: ReducedMotionSettings = koinInject(),
     colorblindSettings: ColorblindSettings = koinInject(),
     adProvider: AdProvider = koinInject(),
+    billingProvider: BillingProvider = koinInject(),
 ) {
     SettingsScreen(
         sound = soundSettings.soundEnabled,
@@ -101,6 +105,16 @@ fun SettingsScreen(
         // real placement (that's ADS-2/4) — purely to verify the native seam end to end.
         debugAdSection = if (AdsDebug.enabled) {
             { DebugAdTrigger(adProvider) }
+        } else {
+            null
+        },
+        // IAP-0 (Sprint 9 spike) — the debug-only "Buy Remove Ads (spike)" trigger, gated by
+        // IapDebug.enabled. Resolves the BillingProvider and runs products() then purchase() of the
+        // single `remove_ads` non-consumable (StoreKit 2 on iOS — verified locally via the committed
+        // .storekit config; Play Billing on Android), surfacing the coarse PurchaseResult. NOT a real
+        // paywall (IAP-4) and NOT wired into ad gating (IAP-2) — purely to verify the native seam.
+        debugIapSection = if (IapDebug.enabled) {
+            { DebugIapTrigger(billingProvider) }
         } else {
             null
         },
@@ -158,6 +172,65 @@ private fun DebugAdTrigger(adProvider: AdProvider) {
 }
 
 /**
+ * IAP-0 — the debug spike trigger: a button that fetches the `remove_ads` product (showing its
+ * localized price) and runs the purchase flow through the injected [billingProvider], surfacing the
+ * resulting [com.fuse.iap.PurchaseResult]. Behind a flag, never wired into entitlements/paywall.
+ * Kept here (not in the presentational screen) so UI tests stay Koin-free.
+ */
+@Composable
+private fun DebugIapTrigger(billingProvider: BillingProvider) {
+    val c = FuseTheme.colors
+    val shape = FuseTheme.shapes.card
+    val scope = rememberCoroutineScope()
+    var status by remember { mutableStateOf("idle") }
+    var price by remember { mutableStateOf("—") }
+    var inFlight by remember { mutableStateOf(false) }
+
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(shape)
+            .background(c.card)
+            .border(1.dp, c.line, shape)
+            .padding(horizontal = 20.dp, vertical = 14.dp)
+            .testTag(SettingsScreenTags.DEBUG_IAP_ROW),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        Text(
+            text = "Debug · IAP spike (IAP-0)",
+            style = FuseTheme.type.headingM.copy(color = c.text),
+        )
+        Text(
+            text = "Remove Ads price: $price",
+            style = FuseTheme.type.bodyM.copy(color = c.sub),
+            modifier = Modifier.testTag(SettingsScreenTags.DEBUG_IAP_PRICE),
+        )
+        Text(
+            text = "Result: $status",
+            style = FuseTheme.type.bodyM.copy(color = c.sub),
+            modifier = Modifier.testTag(SettingsScreenTags.DEBUG_IAP_RESULT),
+        )
+        TextButton(
+            onClick = {
+                if (inFlight) return@TextButton
+                inFlight = true
+                status = "purchasing…"
+                scope.launch {
+                    price = billingProvider.products(Iap.ALL_PRODUCT_IDS)
+                        .firstOrNull { it.id == Iap.PRODUCT_REMOVE_ADS }?.price ?: "unavailable"
+                    val result = billingProvider.purchase(Iap.PRODUCT_REMOVE_ADS)
+                    status = result.name
+                    inFlight = false
+                }
+            },
+            modifier = Modifier.testTag(SettingsScreenTags.DEBUG_IAP_BUTTON),
+        ) {
+            Text("Buy Remove Ads (spike)", style = FuseTheme.type.headingM.copy(color = c.accent))
+        }
+    }
+}
+
+/**
  * SHL-3 — the **presentational** Settings screen (value-driven; no Koin, no state).
  *
  * @param sound / [haptics] / [reducedMotion] / [colorblind] the current toggle values.
@@ -178,6 +251,7 @@ fun SettingsScreen(
     onBack: () -> Unit,
     modifier: Modifier = Modifier,
     debugAdSection: (@Composable () -> Unit)? = null,
+    debugIapSection: (@Composable () -> Unit)? = null,
 ) {
     val c = FuseTheme.colors
     Column(
@@ -251,6 +325,10 @@ fun SettingsScreen(
             // ADS-0 (Sprint 8 spike) — optional debug ad trigger, supplied only by the stateful
             // wrapper when AdsDebug.enabled. Null in tests/previews, so the screen stays Koin-free.
             debugAdSection?.invoke()
+
+            // IAP-0 (Sprint 9 spike) — optional debug billing trigger, supplied only by the stateful
+            // wrapper when IapDebug.enabled. Null in tests/previews, so the screen stays Koin-free.
+            debugIapSection?.invoke()
         }
     }
 }
@@ -317,4 +395,10 @@ object SettingsScreenTags {
     const val DEBUG_AD_ROW: String = "settings_debug_ad_row"
     const val DEBUG_AD_BUTTON: String = "settings_debug_ad_button"
     const val DEBUG_AD_RESULT: String = "settings_debug_ad_result"
+
+    // IAP-0 (Sprint 9 spike) — debug billing trigger tags.
+    const val DEBUG_IAP_ROW: String = "settings_debug_iap_row"
+    const val DEBUG_IAP_BUTTON: String = "settings_debug_iap_button"
+    const val DEBUG_IAP_PRICE: String = "settings_debug_iap_price"
+    const val DEBUG_IAP_RESULT: String = "settings_debug_iap_result"
 }

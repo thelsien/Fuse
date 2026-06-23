@@ -58,6 +58,14 @@ kotlinx-datetime = "0.6.2"
 # nothing account-specific is committed; the real AdMob App ID / unit IDs are injected at release
 # from a gitignored config (see the ADS-0 gotchas doc).
 play-services-ads = "24.4.0"
+# IAP-0 (Sprint 9 spike): Google Play Billing Library. Android-only Gradle dep (iOS uses StoreKit 2,
+# a system framework, via a Swift bridge — no Gradle dep). 9.1.0 is the current stable release on
+# Google's Maven; it exposes the `queryProductDetailsAsync` → `QueryProductDetailsResult` API used by
+# `BillingProvider.android.kt`. Native billing authenticates via the signed app, so NOTHING
+# account-specific is committed (the `remove_ads` product id is public). Real sandbox round-trips need
+# a Play Console (internal-testing track + the `remove_ads` product + a license tester) — see the
+# IAP-0 gotchas doc; the spike only proves build + connect + query on Android.
+play-billing = "9.1.0"
 
 [libraries]
 robolectric = { module = "org.robolectric:robolectric", version.ref = "robolectric" }
@@ -91,6 +99,11 @@ kotlinx-datetime = { module = "org.jetbrains.kotlinx:kotlinx-datetime", version.
 # ADS-0: Google Mobile Ads (AdMob) SDK — Android only. Consumed by the :shared androidMain
 # `AdProvider.android.kt` actual (initialise MobileAds + load/show a test rewarded ad).
 play-services-ads = { module = "com.google.android.gms:play-services-ads", version.ref = "play-services-ads" }
+# IAP-0: Play Billing Library — Android only. Consumed by the :shared androidMain
+# `BillingProvider.android.kt` actual (connect BillingClient + query `remove_ads` + launch flow +
+# acknowledge). The iOS billing SDK is NOT a Gradle dep: StoreKit 2 is a system framework reached via
+# a Swift bridge, so the shared framework keeps compiling with zero third-party iOS deps.
+play-billing = { module = "com.android.billingclient:billing", version.ref = "play-billing" }
 
 [plugins]
 kotlin-multiplatform = { id = "org.jetbrains.kotlin.multiplatform", version.ref = "kotlin" }

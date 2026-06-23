@@ -40,6 +40,12 @@
       debugDocumentVersioning = "YES"
       debugServiceExtension = "internal"
       allowLocationSimulation = "YES">
+      <!-- IAP-0: StoreKit LOCAL testing config (the committed Config.storekit) so a sandbox
+           purchase of `remove_ads` round-trips on the simulator with no App Store Connect.
+           Path is relative to the .xcodeproj container; Config.storekit sits beside it in iosApp/. -->
+      <StoreKitConfigurationFileReference
+         identifier = "../Config.storekit">
+      </StoreKitConfigurationFileReference>
       <BuildableProductRunnable
          runnableDebuggingMode = "0">
          <BuildableReference

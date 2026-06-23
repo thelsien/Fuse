@@ -85,6 +85,12 @@ kotlin {
             // Manager, and the iOS Kotlin actual delegates to a Swift-implemented bridge so the
             // shared framework keeps compiling with zero third-party iOS deps.
             implementation(libs.play.services.ads)
+            // IAP-0 (Sprint 9 spike): Google Play Billing Library — Android only. Backs the
+            // `BillingProvider.android.kt` actual (connect BillingClient + query `remove_ads` +
+            // launch flow + acknowledge). The iOS billing path is StoreKit 2 (a system framework)
+            // via a Swift bridge, so it is NOT a Gradle dep — the shared framework keeps compiling
+            // with zero third-party iOS deps, mirroring how the ad SDK is split per platform.
+            implementation(libs.play.billing)
         }
         // On Android, Compose's `runComposeUiTest` executes as a local JVM unit
         // test through Robolectric (configured via testOptions below), so it runs

@@ -20,6 +20,7 @@ import com.fuse.ads.Entitlements
 import com.fuse.ads.InterstitialController
 import com.fuse.ads.NoOpEntitlements
 import com.fuse.ads.platformAdsModule
+import com.fuse.iap.platformBillingModule
 import com.fuse.daily.DailyClock
 import com.fuse.daily.SystemDailyClock
 import com.fuse.daily.platformSharerModule
@@ -228,6 +229,11 @@ val appModules: List<Module> = listOf(
     // "Show test ad" trigger resolves [com.fuse.ads.AdProvider] from here to load+show ONE
     // Google-TEST rewarded ad. Behind a flag; not wired into any real placement (that's ADS-2/4).
     platformAdsModule,
+    // IAP-0 (Sprint 9 spike) — the native billing seam (BillingProvider expect/actual). Settings'
+    // debug "Buy Remove Ads (spike)" trigger resolves [com.fuse.iap.BillingProvider] from here to
+    // query + purchase the single `remove_ads` non-consumable (StoreKit 2 on iOS, Play Billing on
+    // Android). Behind a flag; not wired into entitlements/ads (that's IAP-2) or a paywall (IAP-4).
+    platformBillingModule,
     dataModule,
     domainModule,
     presentationModule,

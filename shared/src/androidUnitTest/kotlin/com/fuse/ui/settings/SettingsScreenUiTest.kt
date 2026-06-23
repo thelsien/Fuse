@@ -7,6 +7,7 @@ import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.runComposeUiTest
 import com.fuse.ads.NoOpAdProvider
+import com.fuse.iap.NoOpBillingProvider
 import com.fuse.feedback.ColorblindSettings
 import com.fuse.feedback.HapticsCoordinator
 import com.fuse.feedback.HapticsSettings
@@ -147,6 +148,9 @@ class SettingsScreenUiTest {
                     // ADS-0: the stateful wrapper now resolves an AdProvider for the debug ad
                     // trigger; supply the NoOp default here so the test stays Koin-free.
                     adProvider = NoOpAdProvider,
+                    // IAP-0: the wrapper also resolves a BillingProvider for the debug billing
+                    // trigger; supply the NoOp default so the test stays Koin-free.
+                    billingProvider = NoOpBillingProvider,
                 )
             }
         }
@@ -186,6 +190,8 @@ class SettingsScreenUiTest {
                     colorblindSettings = ColorblindSettings(),
                     // ADS-0: supply the NoOp AdProvider so the stateful wrapper stays Koin-free here.
                     adProvider = NoOpAdProvider,
+                    // IAP-0: likewise the NoOp BillingProvider.
+                    billingProvider = NoOpBillingProvider,
                 )
             }
         }
