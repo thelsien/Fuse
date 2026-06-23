@@ -143,7 +143,24 @@ class GameStore(
         when (intent) {
             is GameIntent.Move -> reduceMove(intent.direction)
             is GameIntent.NewGame -> reduceNewGame(intent.seed)
+            is GameIntent.Revive -> reduceRevive()
         }
+    }
+
+    /**
+     * ADS-2 — revive the current game (game-over → playable) by freeing space, ONLY when the
+     * game [GameState.canRevive] (terminal AND not already revived this game). The ad orchestration
+     * lives in the UI ([com.fuse.ui.game.GameScreen]); this reduce is the pure, synchronous grant
+     * the UI calls AFTER a verified rewarded completion. Anything else is a no-op (no state change,
+     * no persist), so a stray/duplicate Revive can never loop the game. On success it sets the
+     * pure-engine [GameState.revive] state (phase Playing, board freed, flag set), persists it
+     * write-through, and projects a fresh playing [GameUiState] (`gameOver = false`, `canRevive = false`).
+     */
+    private fun reduceRevive() {
+        if (!gameState.canRevive) return
+        gameState = gameState.revive()
+        _state.value = GameUiState.playing(gameState)
+        persist()
     }
 
     private fun reduceMove(direction: Direction) {
@@ -253,6 +270,15 @@ sealed interface GameIntent {
      * specific, reproducible game (used by tests / a future "share this board").
      */
     data class NewGame(val seed: Long? = null) : GameIntent
+
+    /**
+     * ADS-2 — revive a lost game (continue playing) by freeing board space. Applied ONLY when the
+     * current game is game-over AND has not already been revived ([GameState.canRevive]); otherwise
+     * a no-op. The UI submits this AFTER a verified rewarded-ad completion (the ad flow lives in
+     * [com.fuse.ui.game.GameScreen]); the store itself stays pure/synchronous and grants nothing
+     * without this intent.
+     */
+    data object Revive : GameIntent
 }
 
 /** UIB-3 — transient one-shot effects emitted by the store (consume once). */
@@ -323,6 +349,10 @@ sealed interface GameEffect {
  *   Continue. It is recomputed on every reduce, so it stays reactive — `true` after
  *   resuming a real save, `false` after a [GameIntent.NewGame] (fresh board, moveCount 0)
  *   or once a move loses the game (phase Lost).
+ * @property canRevive ADS-2 — `true` iff the current game is game-over AND has not yet been
+ *   revived ([GameState.canRevive]). Drives the optional "Continue — Watch Ad" action in the
+ *   lose overlay: shown only while `true`, hidden after the one allowed revive (a revived game
+ *   is back to Playing, so this is `false` for the rest of that game).
  */
 data class GameUiState(
     val board: Board,
@@ -335,6 +365,7 @@ data class GameUiState(
     val spawned: Tile? = null,
     val spawnPosition: Position? = null,
     val canResume: Boolean = false,
+    val canRevive: Boolean = false,
 ) {
     /** Convenience for the swipe `enabled` flag: input is live unless the game is lost. */
     val isGameOver: Boolean get() = gameOver
@@ -364,6 +395,9 @@ data class GameUiState(
             // SHL-4 — project resumability of the very state we're rendering. For a fresh
             // newGame (moveCount 0) this is false; for a resumed save (moveCount > 0) true.
             canResume = isResumable(state),
+            // ADS-2 — true at game-over before the one allowed revive; false otherwise (incl.
+            // a fresh/playing game, or a game-over already revived).
+            canRevive = state.canRevive,
         )
 
         /** Projection after an ACCEPTED move, carrying that move's events. */
@@ -382,6 +416,9 @@ data class GameUiState(
             // SHL-4 — after the first accepted move (moveCount ≥ 1) the game becomes
             // resumable; on the move that loses the game (phase Lost) it flips back to false.
             canResume = isResumable(state),
+            // ADS-2 — the move that loses the game (phase Lost, not yet revived) makes the
+            // revive offer available; on any non-lost move it is false.
+            canRevive = state.canRevive,
         )
     }
 }

@@ -8,6 +8,8 @@ import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.runComposeUiTest
 import androidx.compose.ui.test.swipeLeft
+import com.fuse.ads.AdManager
+import com.fuse.ads.NoOpAdProvider
 import com.fuse.engine.Board
 import com.fuse.engine.GamePhase
 import com.fuse.engine.GameState
@@ -81,6 +83,7 @@ class GameScreenUiTest {
                     haptics = testHaptics(),
                     sound = testSound(),
                     achievements = testAchievements(),
+                    adManager = AdManager(NoOpAdProvider),
                 )
             }
         }
@@ -120,6 +123,7 @@ class GameScreenUiTest {
                     haptics = testHaptics(),
                     sound = testSound(),
                     achievements = testAchievements(),
+                    adManager = AdManager(NoOpAdProvider),
                 )
             }
         }
@@ -157,6 +161,7 @@ class GameScreenUiTest {
                     haptics = testHaptics(),
                     sound = testSound(),
                     achievements = testAchievements(),
+                    adManager = AdManager(NoOpAdProvider),
                 )
             }
         }

@@ -123,12 +123,23 @@ fun WinOverlay(
 /**
  * The game-over overlay shown when the game is lost (board stuck, no move changes it).
  *
- * Shows the final [score] (and session [best]) and a single **Restart** action
- * ([onRestart]) that starts a fresh game. No "continue" — `Lost` is terminal.
+ * Shows the final [score] (and session [best]) and a **Restart** action ([onRestart]) that
+ * starts a fresh game. ADS-2 adds an OPTIONAL **Continue — Watch Ad** action ([onContinue])
+ * shown only when [canRevive] is `true` (the game is game-over and has not yet been revived):
+ * tapping it asks the host to play a rewarded ad and, on a verified completion, revive the game
+ * so play resumes. The Continue action is purely presentational here — the ad flow + reward
+ * gating live in [GameScreen]; this overlay only renders the button and forwards the tap.
+ *
+ * When [canRevive] is `false` (no revive available — e.g. a game already revived once, or a
+ * host that never offers revive) the overlay degrades to Restart-only, exactly as before ADS-2.
  *
  * @param score the final score.
  * @param best the session best score.
  * @param onRestart start a new game.
+ * @param canRevive whether to show the optional Continue — Watch Ad action.
+ * @param onContinue tapped when the player opts into the rewarded revive (no-op by default).
+ * @param showNoAdNote whether to show the brief "No ad available" graceful-fallback note
+ *   (set by the host after a rewarded attempt that did not earn a reward).
  */
 @Composable
 fun LoseOverlay(
@@ -136,6 +147,9 @@ fun LoseOverlay(
     best: Long,
     onRestart: () -> Unit,
     modifier: Modifier = Modifier,
+    canRevive: Boolean = false,
+    onContinue: () -> Unit = {},
+    showNoAdNote: Boolean = false,
 ) {
     val c = FuseTheme.colors
     OverlayScaffold(
@@ -157,6 +171,37 @@ fun LoseOverlay(
         Spacer(Modifier.height(16.dp))
         ScoreSummary(score = score, best = best)
         Spacer(Modifier.height(20.dp))
+        // ADS-2 — the optional rewarded "continue". Shown ONLY while a revive is available;
+        // a successful rewarded watch (handled by the host) revives the game and dismisses
+        // this overlay. Leads the card (above Restart) as the encouraged action; styled with
+        // the mint brand accent like the win card's primary action.
+        if (canRevive) {
+            Button(
+                onClick = onContinue,
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = c.good,
+                    contentColor = c.bg,
+                ),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .testTag(GameOverlayTags.LOSE_CONTINUE)
+                    .semantics { contentDescription = "Continue by watching an ad" },
+            ) {
+                Text("Continue — Watch Ad")
+            }
+            // ADS-2 — graceful-fallback note when a rewarded attempt earned no reward
+            // (no-fill / dismissed / failed). The overlay stays; the player can retry or restart.
+            if (showNoAdNote) {
+                Spacer(Modifier.height(6.dp))
+                Text(
+                    text = "No ad available — try again",
+                    style = FuseTheme.type.bodyS.copy(color = c.sub),
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.testTag(GameOverlayTags.LOSE_NO_AD_NOTE),
+                )
+            }
+            Spacer(Modifier.height(12.dp))
+        }
         Button(
             onClick = onRestart,
             colors = ButtonDefaults.buttonColors(
@@ -244,6 +289,12 @@ object GameOverlayTags {
     const val LOSE_ROOT: String = "overlay_lose"
     const val LOSE_TITLE: String = "overlay_lose_title"
     const val LOSE_RESTART: String = "overlay_lose_restart"
+
+    /** ADS-2 — the optional rewarded "continue" action (rendered only when a revive is available). */
+    const val LOSE_CONTINUE: String = "overlay_lose_continue"
+
+    /** ADS-2 — the brief "No ad available" graceful-fallback note. */
+    const val LOSE_NO_AD_NOTE: String = "overlay_lose_no_ad_note"
 
     /** Shared score/best summary tags (present in whichever overlay is shown). */
     const val SCORE_VALUE: String = "overlay_score_value"

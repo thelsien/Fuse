@@ -83,6 +83,10 @@ sealed interface GamePhase {
  * @property moveCount number of ACCEPTED moves played (no-op moves never increment).
  * @property target the win target (default 2048); stored so a Daily Challenge with a
  *   different goal replays identically.
+ * @property revivedThisGame ADS-2 — `true` once this game has been revived (see [revive]).
+ *   A game may be revived AT MOST ONCE (prevents an infinite ad-revive loop); a second
+ *   [revive] is a no-op. [newGame] starts it `false`. Defaulted so OLD persisted blobs
+ *   that pre-date this field still decode (they decode to `false` = never revived).
  */
 @Serializable
 data class GameState(
@@ -93,6 +97,7 @@ data class GameState(
     val nextTileId: Long,
     val moveCount: Int,
     val target: Int = DEFAULT_WIN_TARGET,
+    val revivedThisGame: Boolean = false,
 ) {
     /** True iff the win target has been reached (persistent condition). */
     val hasWon: Boolean get() = phase.isWon
@@ -167,6 +172,9 @@ data class GameState(
             nextTileId = idSource.peek(),
             moveCount = newMoveCount,
             target = target,
+            // ADS-2 — carry the once-per-game revive latch forward across moves: a game
+            // that was revived stays "already revived" no matter how it is played on.
+            revivedThisGame = revivedThisGame,
         )
 
         return MoveOutcome(
@@ -181,8 +189,55 @@ data class GameState(
         )
     }
 
+    /**
+     * ADS-2 — whether this game may be revived right now: it must be terminal
+     * ([GamePhase.Lost]) AND not already revived ([revivedThisGame] `false`). The UI uses
+     * this to show/hide the optional "Continue — Watch Ad" action and the store guards
+     * [revive] on it.
+     */
+    val canRevive: Boolean get() = phase.isLost && !revivedThisGame
+
+    /**
+     * ADS-2 — REVIVE a lost game by FREEING SPACE so play can resume. PURE: returns a new
+     * [GameState]; `this` is never mutated.
+     *
+     * ## When it does nothing (rejected → returns `this` unchanged)
+     * Revive only applies to a game that [canRevive]: it must be [GamePhase.Lost] AND not
+     * already revived. On a non-lost game, or a second revive, this is a no-op (returns the
+     * receiver), which is what prevents an infinite ad-revive loop.
+     *
+     * ## The space-freeing rule (deterministic, documented)
+     * The board is freed by removing the LOWEST-valued tiles until at least
+     * `ceil(cellCount / 3)` cells are empty (on a classic 4×4 that is `ceil(16/3) = 6`
+     * free cells). Tiles are removed in ascending order of `(value, row-major position)`:
+     * lowest value first, and among equal values the earliest row-major cell first — a
+     * fully deterministic, stable tie-break (see [Board.clearLowestUntilFree]). A
+     * board that already has enough free cells is left untouched (only the phase/flag
+     * change). The player's big tiles are preserved as far as possible; only the cheapest
+     * tiles are sacrificed.
+     *
+     * ## What is preserved
+     * `score`, `moveCount`, `target`, and the rng/id state (`rngState`, `nextTileId`) all
+     * carry over unchanged, so the game continues deterministically from where it stood.
+     * [phase] is set back to [GamePhase.Playing] and [revivedThisGame] to `true`.
+     */
+    fun revive(): GameState {
+        if (!canRevive) return this
+        return copy(
+            board = board.clearLowestUntilFree(reviveTargetEmptyCells(board)),
+            phase = GamePhase.Playing,
+            revivedThisGame = true,
+        )
+    }
+
     companion object
 }
+
+/**
+ * ADS-2 — the documented revive target: the number of cells revive frees up, `ceil(cellCount / 3)`
+ * (6 on a classic 4×4). Pulled out so the rule lives in one named place.
+ */
+internal fun reviveTargetEmptyCells(board: Board): Int = (board.cellCount + 2) / 3
 
 /**
  * The result of a single [GameState.applyMove] (ENG-9): the resulting [state] plus a

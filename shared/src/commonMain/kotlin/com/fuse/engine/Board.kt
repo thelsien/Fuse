@@ -89,6 +89,40 @@ class Board internal constructor(
         return Board(size, updated)
     }
 
+    /**
+     * ADS-2 — returns a new board with the LOWEST-valued tiles removed until at least
+     * [targetEmpty] cells are empty. Pure — `this` is unchanged.
+     *
+     * Removal order is ascending by `(value, row-major index)`: the smallest-valued tiles
+     * go first, and among tiles of equal value the earliest row-major cell goes first.
+     * This is a fully deterministic, stable tie-break, so the same board always revives to
+     * the same result. Tiles are removed one at a time until the empty-cell count reaches
+     * [targetEmpty]; if the board already has that many (or more) empty cells, it is
+     * returned unchanged. [targetEmpty] is clamped to `[0, cellCount]`.
+     *
+     * Used by [GameState.revive] to open up a stuck board while preserving the player's
+     * highest tiles as far as possible.
+     */
+    fun clearLowestUntilFree(targetEmpty: Int): Board {
+        val want = targetEmpty.coerceIn(0, cellCount)
+        var emptyCount = cells.count { it == null }
+        if (emptyCount >= want) return this
+
+        // Indices of occupied cells, ordered cheapest-first then earliest row-major
+        // (the index itself is the row-major position, so it is the stable tie-break).
+        val removalOrder = cells
+            .mapIndexedNotNull { index, tile -> tile?.let { index to it.value } }
+            .sortedWith(compareBy({ it.second }, { it.first }))
+
+        val updated = cells.toMutableList()
+        for ((index, _) in removalOrder) {
+            if (emptyCount >= want) break
+            updated[index] = null
+            emptyCount++
+        }
+        return Board(size, updated)
+    }
+
     private fun index(row: Int, col: Int): Int = row * size + col
 
     private fun positionOf(index: Int): Position = Position(index / size, index % size)

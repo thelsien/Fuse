@@ -5,6 +5,8 @@ import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.runComposeUiTest
 import androidx.compose.ui.test.swipeLeft
+import com.fuse.ads.AdManager
+import com.fuse.ads.NoOpAdProvider
 import com.fuse.engine.Board
 import com.fuse.engine.GamePhase
 import com.fuse.engine.GameState
@@ -70,7 +72,7 @@ class MilestoneEffectUiTest {
         val store = GameStore.forState(stateFromBoard(nearMilestoneBoard()))
         mainClock.autoAdvance = false
         setContent {
-            FuseTheme { GameScreen(store = store, haptics = testHaptics(), sound = testSound(), achievements = AchievementsStore()) }
+            FuseTheme { GameScreen(store = store, haptics = testHaptics(), sound = testSound(), achievements = AchievementsStore(), adManager = AdManager(NoOpAdProvider)) }
         }
 
         // No milestone yet — the effect overlay is absent.
@@ -96,7 +98,7 @@ class MilestoneEffectUiTest {
         setContent {
             // Reduced motion active: the milestone burst/flash must NOT appear at all (hard AC).
             FuseTheme(reducedMotion = true) {
-                GameScreen(store = store, haptics = testHaptics(), sound = testSound(), achievements = AchievementsStore())
+                GameScreen(store = store, haptics = testHaptics(), sound = testSound(), achievements = AchievementsStore(), adManager = AdManager(NoOpAdProvider))
             }
         }
 
@@ -131,7 +133,7 @@ class MilestoneEffectUiTest {
         )
         mainClock.autoAdvance = false
         setContent {
-            FuseTheme { GameScreen(store = store, haptics = testHaptics(), sound = testSound(), achievements = AchievementsStore()) }
+            FuseTheme { GameScreen(store = store, haptics = testHaptics(), sound = testSound(), achievements = AchievementsStore(), adManager = AdManager(NoOpAdProvider)) }
         }
 
         onNodeWithTag(GameScreenTags.BOARD).performTouchInput { swipeLeft() }

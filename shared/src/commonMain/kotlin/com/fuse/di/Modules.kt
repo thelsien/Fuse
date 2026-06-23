@@ -13,6 +13,7 @@ import com.fuse.data.SettingsDailyRepository
 import com.fuse.data.SettingsDailyStreakRepository
 import com.fuse.data.SettingsGameRepository
 import com.fuse.data.platformSettingsModule
+import com.fuse.ads.AdManager
 import com.fuse.ads.platformAdsModule
 import com.fuse.daily.DailyClock
 import com.fuse.daily.SystemDailyClock
@@ -96,6 +97,11 @@ val domainModule: Module = module {
 /** Presentation layer — MVI stores/presenters. */
 val presentationModule: Module = module {
     factory { SamplePresenter(get()) }
+    // ADS-1/ADS-2 — the load-then-show coordinator over the platform [com.fuse.ads.AdProvider]
+    // (bound by [platformAdsModule]). `single` mirrors the provider's single (one stateful ad
+    // cache). ADS-2 wires this into GameScreen's game-over revive: a verified rewarded completion
+    // (showRewarded() → AdResult.isRewardEarned) grants GameIntent.Revive. ADS-3/4 reuse it.
+    single { AdManager(provider = get()) }
     // UIB-3/UIB-6: the game's MVI store. `single` — it holds the live GameState, so the
     // whole app shares one game instance. The store takes the [GameRepository] so it
     // loads any saved game/best on init (resume) and persists after every change.

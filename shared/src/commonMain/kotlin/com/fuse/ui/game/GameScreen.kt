@@ -15,6 +15,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -22,6 +23,8 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
+import com.fuse.ads.AdManager
+import com.fuse.ads.isRewardEarned
 import com.fuse.feedback.HapticsCoordinator
 import com.fuse.feedback.SoundCoordinator
 import com.fuse.feedback.comboCount
@@ -37,6 +40,7 @@ import com.fuse.ui.board.BoardView
 import com.fuse.ui.input.swipeable
 import com.fuse.ui.theme.FuseTheme
 import kotlinx.coroutines.flow.filterIsInstance
+import kotlinx.coroutines.launch
 import org.koin.compose.koinInject
 
 /**
@@ -71,9 +75,11 @@ fun GameScreen(
     haptics: HapticsCoordinator = koinInject(),
     sound: SoundCoordinator = koinInject(),
     achievements: AchievementsStore = koinInject(),
+    adManager: AdManager = koinInject(),
     onBack: (() -> Unit)? = null,
 ) {
     val state by store.state.collectAsState()
+    val scope = rememberCoroutineScope()
 
     // FEL-6 — milestone VISUAL trigger. A one-shot token (value + nonce) raised below from a
     // milestone `Moved`; the layered [MilestoneEffect] is keyed on it and (re)plays the
@@ -153,6 +159,20 @@ fun GameScreen(
         store.effects.filterIsInstance<GameEffect.Won>().collect { showWin = true }
     }
 
+    // ADS-2 — rewarded revive orchestration lives HERE (not in the pure store).
+    //
+    // On the lose overlay's "Continue — Watch Ad" tap we launch a rewarded ad through the
+    // injected [AdManager] (load-then-show). The revive is granted ONLY on a verified rewarded
+    // COMPLETION ([AdResult.isRewardEarned], i.e. AdResult.Rewarded) — then we submit
+    // [GameIntent.Revive], which the store applies once-per-game. Every other outcome
+    // (NoFill / Dismissed / Failed / NotReady) degrades gracefully: NO revive, no crash, the
+    // game-over overlay stays up and Restart remains available; we just surface a brief
+    // "No ad available" note. `reviewInFlight` guards against a double-tap launching two ads.
+    // Rewarded is NOT entitlement-gated — Remove-Ads keeps rewarded — so revive is offered
+    // regardless of any purchase state.
+    var reviveInFlight by remember(store) { mutableStateOf(false) }
+    var showNoAdNote by remember(store) { mutableStateOf(false) }
+
     GameScreenContent(
         state = state,
         onSwipe = { store.accept(GameIntent.Move(it)) },
@@ -165,8 +185,26 @@ fun GameScreen(
         onKeepGoing = { showWin = false },
         onRestart = {
             showWin = false
+            showNoAdNote = false
             store.accept(GameIntent.NewGame())
         },
+        onContinue = {
+            if (!reviveInFlight) {
+                reviveInFlight = true
+                showNoAdNote = false
+                scope.launch {
+                    val result = adManager.showRewarded()
+                    if (result.isRewardEarned) {
+                        store.accept(GameIntent.Revive)
+                    } else {
+                        // Graceful fallback: keep the overlay, tell the player no ad was available.
+                        showNoAdNote = true
+                    }
+                    reviveInFlight = false
+                }
+            }
+        },
+        showNoAdNote = showNoAdNote,
         onBack = onBack,
         modifier = modifier,
     )
@@ -189,6 +227,8 @@ fun GameScreenContent(
     showWin: Boolean = false,
     onKeepGoing: () -> Unit = {},
     onRestart: () -> Unit = onNewGame,
+    onContinue: () -> Unit = {},
+    showNoAdNote: Boolean = false,
     onBack: (() -> Unit)? = null,
 ) {
     Box(
@@ -295,6 +335,11 @@ fun GameScreenContent(
                 score = state.currentScore,
                 best = state.bestScore,
                 onRestart = onRestart,
+                // ADS-2 — offer the rewarded "continue" only while a revive is available
+                // (game-over, not yet revived this game); after the one revive it is hidden.
+                canRevive = state.canRevive,
+                onContinue = onContinue,
+                showNoAdNote = showNoAdNote,
             )
         } else if (showWin) {
             WinOverlay(
