@@ -1,5 +1,8 @@
 package com.fuse.presentation
 
+import com.fuse.analytics.AnalyticsLogger
+import com.fuse.analytics.NoOpAnalyticsLogger
+import com.fuse.analytics.logDailyCompleted
 import com.fuse.daily.DailyClock
 import com.fuse.daily.DailyPuzzle
 import com.fuse.daily.dailyDayNumber
@@ -85,6 +88,12 @@ class DailyStore(
     private val clock: DailyClock,
     private val repository: DailyRepository = NoOpDailyRepository,
     private val puzzle: DailyPuzzle = dailyPuzzleFor(clock.todayUtc()),
+    /**
+     * ANL-2 — analytics seam. Fires `daily_completed` (day_number/moves/par) exactly once on the
+     * winning move, alongside the one-shot [DailyEffect.Solved]. Defaults to [NoOpAnalyticsLogger]
+     * so existing tests/previews construct unchanged; the Koin singleton injects the real logger.
+     */
+    private val analytics: AnalyticsLogger = NoOpAnalyticsLogger,
 ) {
     /** The Daily #N for today — the new-day-reset key and the header label. */
     private val dayNumber: Long = dailyDayNumber(clock.todayUtc())
@@ -156,7 +165,11 @@ class DailyStore(
 
         _state.value = project(lastMerges = result.merges, board = result.board)
 
-        if (won) _effects.tryEmit(DailyEffect.Solved(dayNumber = dayNumber, moves = moves.size))
+        if (won) {
+            _effects.tryEmit(DailyEffect.Solved(dayNumber = dayNumber, moves = moves.size))
+            // ANL-2 — log `daily_completed` once on the solving move (day, move count, the day's par).
+            analytics.logDailyCompleted(dayNumber = dayNumber, moves = moves.size, par = puzzle.par)
+        }
     }
 
     private fun reduceUndo() {

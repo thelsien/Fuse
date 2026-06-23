@@ -1,5 +1,8 @@
 package com.fuse.presentation
 
+import com.fuse.analytics.AnalyticsLogger
+import com.fuse.analytics.NoOpAnalyticsLogger
+import com.fuse.analytics.logIapPurchase
 import com.fuse.iap.BillingProvider
 import com.fuse.iap.Iap
 import com.fuse.iap.NoOpBillingProvider
@@ -89,6 +92,14 @@ class RemoveAdsStore(
     private val billing: BillingProvider = NoOpBillingProvider,
     private val scope: CoroutineScope,
     private val onOwned: () -> Unit = {},
+    /**
+     * ANL-2 — analytics seam. Fires `iap_purchase` (product_id=remove_ads) on a successful
+     * [purchase] (a [PurchaseResult.Purchased] outcome — a NEW purchase). It is NOT fired on
+     * `AlreadyOwned`, on a refresh that merely discovers prior ownership, or on a restore (IAP-3):
+     * those are not new purchase conversions. Defaults to [NoOpAnalyticsLogger] so previews/tests
+     * construct unchanged; the Koin singleton injects the real logger.
+     */
+    private val analytics: AnalyticsLogger = NoOpAnalyticsLogger,
     refreshOnInit: Boolean = true,
 ) {
     private val _state = MutableStateFlow(RemoveAdsUiState())
@@ -164,6 +175,9 @@ class RemoveAdsStore(
                 lastResult = result,
             )
             _outcomes.tryEmit(result)
+            // ANL-2 — log `iap_purchase` on a NEW purchase conversion (Purchased only; AlreadyOwned
+            // is not a new sale). product_id is the only param — no PII (no order id, no account).
+            if (result == PurchaseResult.Purchased) analytics.logIapPurchase()
             // IAP-2: a successful purchase (Purchased / AlreadyOwned) grants the persisted
             // entitlement once, on the false → true transition — suppressing interstitials and
             // surviving relaunch. Rewarded ads are never gated by this.

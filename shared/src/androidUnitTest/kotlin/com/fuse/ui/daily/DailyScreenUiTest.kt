@@ -11,6 +11,7 @@ import androidx.compose.ui.test.runComposeUiTest
 import androidx.compose.ui.test.swipeLeft
 import com.fuse.ads.AdManager
 import com.fuse.ads.FakeAdProvider
+import com.fuse.analytics.FakeAnalyticsLogger
 import com.fuse.daily.DailyPuzzle
 import com.fuse.daily.Sharer
 import com.fuse.engine.Board
@@ -113,7 +114,7 @@ class DailyScreenUiTest {
     @Test
     fun aSwipeThatChangesBoardUpdatesTheCounter() = runComposeUiTest {
         val store = trivialStore()
-        setContent { FuseTheme { DailyScreen(store = store, streakStore = streakStore(), sharer = FakeSharer(), adManager = noAdsManager()) } }
+        setContent { FuseTheme { DailyScreen(store = store, streakStore = streakStore(), sharer = FakeSharer(), adManager = noAdsManager(), analytics = FakeAnalyticsLogger()) } }
 
         onNodeWithTag(DailyHudTags.MOVES).assertTextEquals("0")
         onNodeWithTag(DailyScreenTags.BOARD).performTouchInput { swipeLeft() }
@@ -141,7 +142,7 @@ class DailyScreenUiTest {
             par = 2,
         )
         val store = DailyStore(clock = FixedClock(LocalDate(2026, 6, 21)), puzzle = puzzle)
-        setContent { FuseTheme { DailyScreen(store = store, streakStore = streakStore(), sharer = FakeSharer(), adManager = noAdsManager()) } }
+        setContent { FuseTheme { DailyScreen(store = store, streakStore = streakStore(), sharer = FakeSharer(), adManager = noAdsManager(), analytics = FakeAnalyticsLogger()) } }
 
         onNodeWithTag(DailyScreenTags.BOARD).performTouchInput { swipeLeft() }
         waitForIdle()
@@ -172,7 +173,7 @@ class DailyScreenUiTest {
             par = 2,
         )
         val store = DailyStore(clock = FixedClock(LocalDate(2026, 6, 21)), puzzle = puzzle)
-        setContent { FuseTheme { DailyScreen(store = store, streakStore = streakStore(), sharer = FakeSharer(), adManager = noAdsManager()) } }
+        setContent { FuseTheme { DailyScreen(store = store, streakStore = streakStore(), sharer = FakeSharer(), adManager = noAdsManager(), analytics = FakeAnalyticsLogger()) } }
 
         onNodeWithTag(DailyScreenTags.BOARD).performTouchInput { swipeLeft() }
         waitForIdle()
@@ -187,7 +188,7 @@ class DailyScreenUiTest {
     @Test
     fun solvingShowsTheSolvedOverlay() = runComposeUiTest {
         val store = trivialStore()
-        setContent { FuseTheme { DailyScreen(store = store, streakStore = streakStore(), sharer = FakeSharer(), adManager = noAdsManager()) } }
+        setContent { FuseTheme { DailyScreen(store = store, streakStore = streakStore(), sharer = FakeSharer(), adManager = noAdsManager(), analytics = FakeAnalyticsLogger()) } }
         onNodeWithTag(DailyScreenTags.BOARD).performTouchInput { swipeLeft() }
         waitForIdle()
         onNodeWithTag(DailyScreenTags.SOLVED_OVERLAY).assertIsDisplayed()
@@ -249,7 +250,7 @@ class DailyScreenUiTest {
         val sharer = FakeSharer()
         val store = trivialStore() // target 32, par 1, day #N from the fixed 2026-06-21 clock.
         setContent {
-            FuseTheme { DailyScreen(store = store, streakStore = streakStore(), sharer = sharer, adManager = noAdsManager()) }
+            FuseTheme { DailyScreen(store = store, streakStore = streakStore(), sharer = sharer, adManager = noAdsManager(), analytics = FakeAnalyticsLogger()) }
         }
 
         onNodeWithTag(DailyScreenTags.BOARD).performTouchInput { swipeLeft() }
@@ -266,11 +267,43 @@ class DailyScreenUiTest {
 
     @OptIn(ExperimentalTestApi::class)
     @Test
+    fun tappingShareLogsShareTappedWithDailySurface() = runComposeUiTest {
+        // ANL-2 — tapping Share logs `share_tapped` (surface=daily) via the injected logger, in
+        // addition to opening the share sheet. Driven through the real DailyScreen so the on-tap
+        // instrumentation in the screen body is exercised.
+        val analytics = FakeAnalyticsLogger()
+        val store = trivialStore()
+        setContent {
+            FuseTheme {
+                DailyScreen(
+                    store = store,
+                    streakStore = streakStore(),
+                    sharer = FakeSharer(),
+                    adManager = noAdsManager(),
+                    analytics = analytics,
+                )
+            }
+        }
+
+        onNodeWithTag(DailyScreenTags.BOARD).performTouchInput { swipeLeft() }
+        waitForIdle()
+        onNodeWithTag(DailyScreenTags.SHARE_BUTTON).performClick()
+        waitForIdle()
+
+        val shareEvents = analytics.loggedEvents.filter { it.name == "share_tapped" }
+        assert(shareEvents.size == 1) { "exactly one share_tapped, got ${analytics.loggedEventNames}" }
+        assert(shareEvents.single().params["surface"] == "daily") {
+            "share_tapped should carry surface=daily, got ${shareEvents.single().params}"
+        }
+    }
+
+    @OptIn(ExperimentalTestApi::class)
+    @Test
     fun solvingARealRunRecordsAndShowsStreakOne() = runComposeUiTest {
         // DLY-5 end-to-end: a live solve drives the recorder (NoOp repo → fresh streak 1) and
         // the overlay shows it.
         val store = trivialStore()
-        setContent { FuseTheme { DailyScreen(store = store, streakStore = streakStore(), sharer = FakeSharer(), adManager = noAdsManager()) } }
+        setContent { FuseTheme { DailyScreen(store = store, streakStore = streakStore(), sharer = FakeSharer(), adManager = noAdsManager(), analytics = FakeAnalyticsLogger()) } }
         onNodeWithTag(DailyScreenTags.BOARD).performTouchInput { swipeLeft() }
         waitForIdle()
         onNodeWithTag(DailyScreenTags.SOLVED_STREAK).assertTextContains("Streak: 1", substring = true)

@@ -35,6 +35,10 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.fuse.ads.AdManager
 import com.fuse.ads.isRewardEarned
+import com.fuse.analytics.AnalyticsLogger
+import com.fuse.analytics.AnalyticsValues
+import com.fuse.analytics.NoOpAnalyticsLogger
+import com.fuse.analytics.logShareTapped
 import com.fuse.daily.Sharer
 import com.fuse.daily.buildDailyShareCard
 import com.fuse.engine.Direction
@@ -79,6 +83,9 @@ fun DailyScreen(
     streakStore: DailyStreakStore = koinInject(),
     sharer: Sharer = koinInject(),
     adManager: AdManager = koinInject(),
+    // ANL-2 — the analytics logger for the `share_tapped` (surface=daily) event fired on the Share
+    // tap. Defaults to NoOp so existing tests/previews construct unchanged; Koin injects the real one.
+    analytics: AnalyticsLogger = koinInject(),
     onBack: (() -> Unit)? = null,
 ) {
     val state by store.state.collectAsState()
@@ -124,7 +131,8 @@ fun DailyScreen(
                 restoreInFlight = true
                 showNoAdNote = false
                 scope.launch {
-                    val result = adManager.showRewarded()
+                    // ANL-2: streak-saver placement → ad_impression / ad_reward_granted in AdManager.
+                    val result = adManager.showRewarded(AnalyticsValues.PLACEMENT_STREAK_SAVER)
                     if (result.isRewardEarned) {
                         // Verified completion → bridge the gap; prompt disappears (canRestore=false).
                         streakStore.restore()
@@ -139,7 +147,11 @@ fun DailyScreen(
         // DLY-7 — Share builds the result card from the day's SHARED start board (so cards are
         // comparable; never the player's mid-solve board), the result fields, and the live
         // streak, then hands it to the platform [Sharer] (native share sheet). User-initiated.
-        onShare = { sharer.share(dailyShareCardFor(state, streak.current)) },
+        // ANL-2 — log `share_tapped` (surface=daily) on the tap, before opening the OS chooser.
+        onShare = {
+            analytics.logShareTapped(AnalyticsValues.SURFACE_DAILY)
+            sharer.share(dailyShareCardFor(state, streak.current))
+        },
         onBack = onBack,
         modifier = modifier,
     )

@@ -7,6 +7,7 @@ import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.runComposeUiTest
 import com.fuse.ads.AdFormat
 import com.fuse.ads.AdManager
+import com.fuse.analytics.FakeAnalyticsLogger
 import com.fuse.ads.AdResult
 import com.fuse.ads.FakeAdProvider
 import com.fuse.daily.DailyClock
@@ -106,6 +107,7 @@ class StreakRestoreUiTest {
                     streakStore = streakStore,
                     sharer = FakeSharer(),
                     adManager = AdManager(fake),
+                    analytics = FakeAnalyticsLogger(),
                 )
             }
         }
@@ -143,6 +145,7 @@ class StreakRestoreUiTest {
                     streakStore = streakStore,
                     sharer = FakeSharer(),
                     adManager = AdManager(fake),
+                    analytics = FakeAnalyticsLogger(),
                 )
             }
         }
@@ -170,6 +173,7 @@ class StreakRestoreUiTest {
                     streakStore = streakStore,
                     sharer = FakeSharer(),
                     adManager = AdManager(fake),
+                    analytics = FakeAnalyticsLogger(),
                 )
             }
         }
@@ -195,6 +199,7 @@ class StreakRestoreUiTest {
                     streakStore = streakStore,
                     sharer = FakeSharer(),
                     adManager = AdManager(fake),
+                    analytics = FakeAnalyticsLogger(),
                 )
             }
         }
@@ -220,6 +225,7 @@ class StreakRestoreUiTest {
                     streakStore = streakStore,
                     sharer = FakeSharer(),
                     adManager = AdManager(FakeAdProvider(loadSucceeds = false)),
+                    analytics = FakeAnalyticsLogger(),
                 )
             }
         }
@@ -237,6 +243,7 @@ class StreakRestoreUiTest {
                     streakStore = streakStore,
                     sharer = FakeSharer(),
                     adManager = AdManager(FakeAdProvider(loadSucceeds = false)),
+                    analytics = FakeAnalyticsLogger(),
                 )
             }
         }
